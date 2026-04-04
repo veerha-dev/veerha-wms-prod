@@ -18,8 +18,7 @@
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["src/*"],
-      "@veerha/shared-types": ["../../packages/shared-types/src/index.ts"]
+      "@/*": ["src/*"]
     }
   },
   "include": ["src/**/*"],

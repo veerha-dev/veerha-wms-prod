@@ -3,7 +3,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import type { ApiResponse } from '@veerha/shared-types';
+interface ApiResponse<T> { success: boolean; data: T; message?: string }
 
 @Controller('api/v1/auth')
 export class AuthController {
