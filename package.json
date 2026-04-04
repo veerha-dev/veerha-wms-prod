@@ -1,0 +1,17 @@
+{
+  "name": "veerha-wms",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Veerha Warehouse Management System - Frontend Demo with Mock Data",
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/frontend",
+    "build": "npm run build --workspace=apps/frontend",
+    "preview": "npm run preview --workspace=apps/frontend",
+    "lint": "npm run lint --workspace=apps/frontend",
+    "test": "npm run test --workspace=apps/frontend"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}
