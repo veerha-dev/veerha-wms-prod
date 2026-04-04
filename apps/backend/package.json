@@ -4,7 +4,7 @@
   "description": "Veerha WMS Backend API",
   "private": true,
   "scripts": {
-    "build": "node_modules/.bin/nest build",
+    "build": "../../node_modules/.bin/nest build",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
