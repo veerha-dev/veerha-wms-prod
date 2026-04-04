@@ -11,9 +11,8 @@ COPY apps/backend/ apps/backend/
 # Install dependencies (handles monorepo workspaces)
 RUN npm install --legacy-peer-deps
 
-# Build backend
-WORKDIR /app/apps/backend
-RUN npm run build
+# Build backend from root (resolves workspace packages)
+RUN npm run build --workspace=apps/backend
 
 # Runtime image
 FROM node:20-alpine
@@ -22,7 +21,6 @@ WORKDIR /app
 # Copy only backend dist and node_modules
 COPY --from=builder /app/apps/backend/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/apps/backend/node_modules ./node_modules/@veerha
 COPY --from=builder /app/apps/backend/package.json ./
 
 EXPOSE 3000
