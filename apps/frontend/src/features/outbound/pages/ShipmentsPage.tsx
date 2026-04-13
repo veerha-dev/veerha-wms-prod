@@ -258,7 +258,14 @@ function CreateShipmentDialog({ open, onOpenChange }: any) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="order_id">Order *</Label>
-              <Select value={formData.order_id} onValueChange={(v) => setFormData({ ...formData, order_id: v })}>
+              <Select value={formData.order_id} onValueChange={(v) => {
+                const selectedSO = ordersData?.data?.find((o: any) => o.id === v);
+                setFormData({
+                  ...formData,
+                  order_id: v,
+                  warehouse_id: selectedSO?.warehouse_id || selectedSO?.warehouseId || formData.warehouse_id,
+                });
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select order" />
                 </SelectTrigger>
@@ -283,6 +290,9 @@ function CreateShipmentDialog({ open, onOpenChange }: any) {
                   ))}
                 </SelectContent>
               </Select>
+              {formData.order_id && formData.warehouse_id && (
+                <p className="text-xs text-muted-foreground">Auto-selected from order</p>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">

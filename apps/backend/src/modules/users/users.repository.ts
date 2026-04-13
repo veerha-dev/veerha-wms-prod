@@ -29,6 +29,11 @@ export class UsersRepository {
       params.push(role);
       paramIndex++;
     }
+    if ((query as any).warehouseId) {
+      conditions.push(`u.warehouse_id = $${paramIndex}`);
+      params.push((query as any).warehouseId);
+      paramIndex++;
+    }
 
     const allowedSort = ['email', 'full_name', 'role', 'created_at', 'last_login'];
     const safeSort = allowedSort.includes(sortBy) ? sortBy : 'created_at';

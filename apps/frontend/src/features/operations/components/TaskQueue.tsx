@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { cn } from '@/shared/lib/utils';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import {
   Clock,
   AlertTriangle,
@@ -221,18 +221,21 @@ export function TaskQueue({ onSelectTask, onAssignTask }: TaskQueueProps) {
                   <TableHead>Warehouse</TableHead>
                   <TableHead>Assigned To</TableHead>
                   <TableHead>
+                    <Button variant="ghost" size="sm" onClick={() => toggleSort('due_at')} className="gap-1 -ml-3">
+                      Due Time
+                      <ArrowUpDown className="h-3 w-3" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>Linked To</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>
                     <Button variant="ghost" size="sm" onClick={() => toggleSort('priority')} className="gap-1 -ml-3">
                       Priority
                       <ArrowUpDown className="h-3 w-3" />
                     </Button>
                   </TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>
-                    <Button variant="ghost" size="sm" onClick={() => toggleSort('due_at')} className="gap-1 -ml-3">
-                      SLA
-                      <ArrowUpDown className="h-3 w-3" />
-                    </Button>
-                  </TableHead>
+                  <TableHead>SLA</TableHead>
                   <TableHead>
                     <Button variant="ghost" size="sm" onClick={() => toggleSort('created_at')} className="gap-1 -ml-3">
                       Created
@@ -281,6 +284,37 @@ export function TaskQueue({ onSelectTask, onAssignTask }: TaskQueueProps) {
                           </div>
                         ) : (
                           <span className="text-sm text-muted-foreground italic">Unassigned</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {task.due_at ? (
+                          <span className={cn(task.sla_breached && 'text-destructive font-medium')}>
+                            {format(new Date(task.due_at), 'MMM dd, HH:mm')}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {task.linkedSoNumber ? (
+                          <Badge variant="outline" className="text-xs">SO: {task.linkedSoNumber}</Badge>
+                        ) : task.linkedGrnNumber ? (
+                          <Badge variant="outline" className="text-xs">GRN: {task.linkedGrnNumber}</Badge>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {task.sourceBinCode ? (
+                          <span>Bin: {task.sourceBinCode}</span>
+                        ) : task.destinationBinCode ? (
+                          <span>Bin: {task.destinationBinCode}</span>
+                        ) : task.binCode ? (
+                          <span>Bin: {task.binCode}</span>
+                        ) : task.zoneName ? (
+                          <span>Zone: {task.zoneName}</span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
                       <TableCell>

@@ -24,7 +24,10 @@ import {
 } from '@/features/inventory/hooks/useCycleCounts';
 import { useWarehouses } from '@/features/warehouse/hooks/useWarehouses';
 import { useZones } from '@/features/warehouse/hooks/useZones';
+import { useRacksByZone } from '@/features/warehouse/hooks/useRacks';
+import { useBinsByRack } from '@/features/warehouse/hooks/useBins';
 import { useUsers } from '@/features/users/hooks/useUsers';
+import { useSKUs } from '@/features/inventory/hooks/useSKUs';
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: any; label: string }> = {
   scheduled: { color: 'text-muted-foreground', bg: 'bg-muted', icon: Clock, label: 'Scheduled' },
@@ -269,16 +272,28 @@ export function CycleCountPage() {
    CREATE CYCLE COUNT DIALOG
    ═══════════════════════════════════════════════════════════ */
 function CreateCycleCountDialog({ open, onOpenChange, onCreate }: any) {
-  const [form, setForm] = useState({ name: '', warehouseId: '', countScope: 'full_zone', zoneId: '', assignedTo: '', scheduledDate: '', priority: 'medium', instructions: '' });
+  const [form, setForm] = useState({ name: '', warehouseId: '', countScope: 'full_zone', zoneId: '', rackId: '', binId: '', skuId: '', assignedTo: '', scheduledDate: '', priority: 'medium', instructions: '' });
   const { data: warehouses } = useWarehouses();
   const { data: zonesData } = useZones({ warehouseId: form.warehouseId || undefined });
   const zones = zonesData || [];
+  const { data: racksData } = useRacksByZone(form.zoneId || null);
+  const racksList = Array.isArray(racksData) ? racksData : [];
+  const { data: binsData } = useBinsByRack(form.rackId || null);
+  const binsList = Array.isArray(binsData) ? binsData : [];
+  const { data: skus } = useSKUs();
   const { data: usersData } = useUsers({ role: 'worker' });
   const workers = usersData?.data || usersData || [];
 
+  const resetForm = () => setForm({ name: '', warehouseId: '', countScope: 'full_zone', zoneId: '', rackId: '', binId: '', skuId: '', assignedTo: '', scheduledDate: '', priority: 'medium', instructions: '' });
+
   const handleSubmit = () => {
     if (!form.name || !form.countScope) return;
-    onCreate.mutate(form, { onSuccess: () => { onOpenChange(false); setForm({ name: '', warehouseId: '', countScope: 'full_zone', zoneId: '', assignedTo: '', scheduledDate: '', priority: 'medium', instructions: '' }); } });
+    onCreate.mutate({
+      ...form,
+      rackId: form.rackId || undefined,
+      binId: form.binId || undefined,
+      skuId: form.skuId || undefined,
+    }, { onSuccess: () => { onOpenChange(false); resetForm(); } });
   };
 
   return (
@@ -297,14 +312,14 @@ function CreateCycleCountDialog({ open, onOpenChange, onCreate }: any) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium">Warehouse</Label>
-              <Select value={form.warehouseId} onValueChange={v => setForm({ ...form, warehouseId: v })}>
+              <Select value={form.warehouseId} onValueChange={v => setForm({ ...form, warehouseId: v, zoneId: '', rackId: '', binId: '' })}>
                 <SelectTrigger><SelectValue placeholder="Select warehouse" /></SelectTrigger>
                 <SelectContent>{(warehouses || []).map((w: any) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label className="text-sm font-medium">Count Scope <span className="text-red-500">*</span></Label>
-              <Select value={form.countScope} onValueChange={v => setForm({ ...form, countScope: v })}>
+              <Select value={form.countScope} onValueChange={v => setForm({ ...form, countScope: v, zoneId: '', rackId: '', binId: '', skuId: '' })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="full_zone">Full Zone</SelectItem>
@@ -316,12 +331,46 @@ function CreateCycleCountDialog({ open, onOpenChange, onCreate }: any) {
             </div>
           </div>
 
-          {form.countScope === 'full_zone' && form.warehouseId && (
+          {/* Zone dropdown — shown for full_zone, specific_rack, specific_bin */}
+          {['full_zone', 'specific_rack', 'specific_bin'].includes(form.countScope) && form.warehouseId && (
             <div className="space-y-2">
               <Label className="text-sm font-medium">Select Zone</Label>
-              <Select value={form.zoneId} onValueChange={v => setForm({ ...form, zoneId: v })}>
+              <Select value={form.zoneId} onValueChange={v => setForm({ ...form, zoneId: v, rackId: '', binId: '' })}>
                 <SelectTrigger><SelectValue placeholder="Choose a zone to count" /></SelectTrigger>
                 <SelectContent>{(Array.isArray(zones) ? zones : []).map((z: any) => <SelectItem key={z.id} value={z.id}>{z.name} ({z.code})</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Rack dropdown — shown for specific_rack, specific_bin */}
+          {['specific_rack', 'specific_bin'].includes(form.countScope) && form.zoneId && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Select Rack</Label>
+              <Select value={form.rackId} onValueChange={v => setForm({ ...form, rackId: v, binId: '' })}>
+                <SelectTrigger><SelectValue placeholder="Choose a rack" /></SelectTrigger>
+                <SelectContent>{racksList.map((r: any) => <SelectItem key={r.id} value={r.id}>{r.name || r.code}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Bin dropdown — shown for specific_bin only */}
+          {form.countScope === 'specific_bin' && form.rackId && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Select Bin</Label>
+              <Select value={form.binId} onValueChange={v => setForm({ ...form, binId: v })}>
+                <SelectTrigger><SelectValue placeholder="Choose a bin" /></SelectTrigger>
+                <SelectContent>{binsList.map((b: any) => <SelectItem key={b.id} value={b.id}>{b.code || b.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* SKU dropdown — shown for sku_based */}
+          {form.countScope === 'sku_based' && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Select SKU</Label>
+              <Select value={form.skuId} onValueChange={v => setForm({ ...form, skuId: v })}>
+                <SelectTrigger><SelectValue placeholder="Search SKU" /></SelectTrigger>
+                <SelectContent>{(Array.isArray(skus) ? skus : []).map((s: any) => <SelectItem key={s.id} value={s.id}>{s.sku_code || s.skuCode} — {s.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           )}

@@ -157,7 +157,7 @@ export default function InvoicesPage() {
               <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
               <DollarSign className="h-4 w-4 text-orange-600" />
             </CardHeader>
-            <CardContent><div className="text-2xl font-bold text-orange-600">{formatCurrency(stats?.totalOutstanding || 0)}</div></CardContent>
+            <CardContent><div className="text-4xl font-bold text-orange-600">{formatCurrency(stats?.totalOutstanding || 0)}</div></CardContent>
           </Card>
         </div>
 

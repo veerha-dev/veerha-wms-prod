@@ -6,6 +6,7 @@ export class QueryUserDto {
   @IsOptional() @IsString() search?: string;
   @IsOptional() @IsString() status?: string;
   @IsOptional() @IsString() role?: string;
+  @IsOptional() @IsString() warehouseId?: string;
   @IsOptional() @IsString() sortBy?: string;
   @IsOptional() @IsString() sortOrder?: string;
 }

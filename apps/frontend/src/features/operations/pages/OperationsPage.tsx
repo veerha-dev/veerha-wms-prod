@@ -4,6 +4,14 @@ import { safeParseInt } from '@/shared/utils/input';
 import { cn } from '@/shared/lib/utils';
 import { api } from '@/shared/lib/api';
 import { toast } from '@/shared/hooks/use-toast';
+import { useWarehouses } from '@/features/warehouse/hooks/useWarehouses';
+import { useZones } from '@/features/warehouse/hooks/useZones';
+import { useRacksByZone } from '@/features/warehouse/hooks/useRacks';
+import { useBinsByRack } from '@/features/warehouse/hooks/useBins';
+import { useUsers } from '@/features/users/hooks/useUsers';
+import { useSalesOrders } from '@/features/outbound/hooks/useSalesOrders';
+import { useGRNs } from '@/features/inbound/hooks/useGRN';
+import { useSKUs } from '@/features/inventory/hooks/useSKUs';
 import { Badge } from '@/shared/components/ui/badge';
 import {
   ClipboardList,
@@ -185,12 +193,43 @@ export default function OperationsPage() {
   const [showTaskDetail, setShowTaskDetail] = useState<Task | null>(null);
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [newTask, setNewTask] = useState({
-    type: 'pick' as const,
-    priority: 'medium' as const,
-    quantity: 1,
+    type: 'pick',
+    priority: 'medium',
+    quantity: 0,
     instructions: '',
     notes: '',
+    warehouseId: '',
+    assignedTo: '',
+    dueDate: '',
+    dueTime: '',
+    linkedSoId: '',
+    sourceBinId: '',
+    linkedGrnId: '',
+    sourceLocation: '',
+    destinationBinId: '',
+    countScope: 'full_zone',
+    zoneId: '',
+    rackId: '',
+    binId: '',
+    skuId: '',
+    recurrence: 'one_time' as 'one_time' | 'recurring',
+    repeatPattern: 'daily' as 'daily' | 'weekly' | 'monthly',
+    daysOfWeek: [] as string[],
   });
+
+  // Data hooks for dynamic form
+  const { data: warehouses } = useWarehouses();
+  const { data: workersData } = useUsers({ role: 'worker', warehouseId: newTask.warehouseId || undefined });
+  const workers = Array.isArray(workersData) ? workersData : [];
+  const { data: zonesData } = useZones({ warehouseId: newTask.warehouseId || undefined });
+  const zones = zonesData || [];
+  const { data: racks } = useRacksByZone(newTask.zoneId || null);
+  const { data: bins } = useBinsByRack(newTask.rackId || null);
+  const { data: sosData } = useSalesOrders();
+  const salesOrders = sosData?.data || [];
+  const { data: grnsData } = useGRNs();
+  const grns = grnsData?.data || [];
+  const { data: skus } = useSKUs();
 
   // Real-time data fetching
   useEffect(() => {
@@ -237,28 +276,74 @@ export default function OperationsPage() {
     }
   };
 
+  const resetNewTask = () => setNewTask({
+    type: 'pick', priority: 'medium', quantity: 0, instructions: '', notes: '',
+    warehouseId: '', assignedTo: '', dueDate: '', dueTime: '',
+    linkedSoId: '', sourceBinId: '', linkedGrnId: '', sourceLocation: '', destinationBinId: '',
+    countScope: 'full_zone', zoneId: '', rackId: '', binId: '', skuId: '',
+    recurrence: 'one_time', repeatPattern: 'daily', daysOfWeek: [],
+  });
+
   const createTask = async () => {
+    if (!newTask.warehouseId) {
+      toast({ title: 'Validation', description: 'Please select a warehouse', variant: 'destructive' });
+      return;
+    }
     try {
-      await api.post('/api/v1/tasks', { type: newTask.type, priority: newTask.priority, quantity: newTask.quantity, instructions: newTask.instructions, notes: newTask.notes });
-      toast({
-        title: 'Success',
-        description: 'Task created successfully',
+      const dueDate = newTask.dueDate ? `${newTask.dueDate}T${newTask.dueTime || '00:00'}` : undefined;
+      await api.post('/api/v1/tasks', {
+        type: newTask.type,
+        priority: newTask.priority,
+        warehouseId: newTask.warehouseId || undefined,
+        assignedTo: newTask.assignedTo || undefined,
+        dueDate,
+        notes: newTask.notes || undefined,
+        instructions: newTask.instructions || undefined,
+        // Pick-specific
+        ...(newTask.type === 'pick' && {
+          quantity: newTask.quantity,
+          linkedSoId: newTask.linkedSoId || undefined,
+          sourceBinId: newTask.sourceBinId || undefined,
+          zoneId: newTask.zoneId || undefined,
+          rackId: newTask.rackId || undefined,
+        }),
+        // Putaway-specific
+        ...(newTask.type === 'putaway' && {
+          quantity: newTask.quantity,
+          linkedGrnId: newTask.linkedGrnId || undefined,
+          sourceLocation: newTask.sourceLocation || undefined,
+          destinationBinId: newTask.destinationBinId || undefined,
+          zoneId: newTask.zoneId || undefined,
+          rackId: newTask.rackId || undefined,
+        }),
+        // Cycle count-specific
+        ...(newTask.type === 'cycle_count' && {
+          countScope: newTask.countScope,
+          zoneId: newTask.zoneId || undefined,
+          rackId: newTask.rackId || undefined,
+          binId: newTask.binId || undefined,
+          skuId: newTask.skuId || undefined,
+        }),
+        // Pack/Transfer
+        ...(['pack', 'transfer'].includes(newTask.type) && {
+          quantity: newTask.quantity,
+        }),
+        // Recurrence
+        recurrence: newTask.recurrence,
+        ...(newTask.recurrence === 'recurring' && {
+          repeatPattern: newTask.repeatPattern,
+          ...(newTask.repeatPattern === 'weekly' && newTask.daysOfWeek.length > 0 && {
+            daysOfWeek: newTask.daysOfWeek.join(','),
+          }),
+        }),
       });
+      toast({ title: 'Success', description: 'Task created successfully' });
       setShowCreateDialog(false);
-      setNewTask({
-        type: 'pick',
-        priority: 'medium',
-        quantity: 1,
-        instructions: '',
-        notes: '',
-      });
+      resetNewTask();
+      fetchTasks();
     } catch (error) {
       console.error('Error creating task:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to create task',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to create task', variant: 'destructive' });
     }
   };
 
@@ -521,39 +606,132 @@ export default function OperationsPage() {
         </Card>
 
         {/* Create Task Dialog */}
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogContent className="sm:max-w-[425px]">
+        <Dialog open={showCreateDialog} onOpenChange={(open) => { setShowCreateDialog(open); if (!open) resetNewTask(); }}>
+          <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create New Task</DialogTitle>
-              <DialogDescription>
-                Create a new task for warehouse operations.
-              </DialogDescription>
+              <DialogDescription>Create a new task for warehouse operations.</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="type" className="text-right">
-                  Type
-                </Label>
-                <Select value={newTask.type} onValueChange={(value: any) => setNewTask({...newTask, type: value})}>
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
+            <div className="space-y-4 py-2">
+              {/* Task Type */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Task Type <span className="text-red-500">*</span></Label>
+                <Select value={newTask.type} onValueChange={(value) => setNewTask({
+                  ...newTask, type: value,
+                  linkedSoId: '', linkedGrnId: '', sourceBinId: '', destinationBinId: '',
+                  sourceLocation: '', countScope: 'full_zone', zoneId: '', rackId: '', binId: '', skuId: '',
+                  quantity: 0,
+                })}>
+                  <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="putaway">Putaway</SelectItem>
                     <SelectItem value="pick">Pick</SelectItem>
+                    <SelectItem value="putaway">Putaway</SelectItem>
+                    <SelectItem value="cycle_count">Cycle Count</SelectItem>
                     <SelectItem value="pack">Pack</SelectItem>
                     <SelectItem value="transfer">Transfer</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="priority" className="text-right">
-                  Priority
-                </Label>
-                <Select value={newTask.priority} onValueChange={(value: any) => setNewTask({...newTask, priority: value})}>
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
+
+              {/* Recurrence */}
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Recurrence</Label>
+                  <Select value={newTask.recurrence} onValueChange={(v: 'one_time' | 'recurring') => setNewTask({ ...newTask, recurrence: v, repeatPattern: 'daily', daysOfWeek: [] })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="one_time">One Time (no repeat)</SelectItem>
+                      <SelectItem value="recurring">Recurring</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {newTask.recurrence === 'recurring' && (
+                  <div className="space-y-3 pl-3 border-l-2 border-primary/20">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Repeat</Label>
+                      <Select value={newTask.repeatPattern} onValueChange={(v: 'daily' | 'weekly' | 'monthly') => setNewTask({ ...newTask, repeatPattern: v, daysOfWeek: [] })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {newTask.repeatPattern === 'weekly' && (
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Every week on</Label>
+                        <div className="flex flex-wrap gap-3">
+                          {(['mon','tue','wed','thu','fri','sat','sun'] as const).map((day) => (
+                            <label key={day} className="flex items-center gap-1.5 cursor-pointer select-none">
+                              <Checkbox
+                                checked={newTask.daysOfWeek.includes(day)}
+                                onCheckedChange={(checked) => {
+                                  setNewTask({
+                                    ...newTask,
+                                    daysOfWeek: checked
+                                      ? [...newTask.daysOfWeek, day]
+                                      : newTask.daysOfWeek.filter(d => d !== day),
+                                  });
+                                }}
+                              />
+                              <span className="text-sm capitalize">{day.charAt(0).toUpperCase() + day.slice(1)}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Common: Warehouse + Assign To */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Warehouse <span className="text-red-500">*</span></Label>
+                  <Select value={newTask.warehouseId} onValueChange={(v) => setNewTask({
+                    ...newTask, warehouseId: v, assignedTo: '', zoneId: '', rackId: '', binId: '',
+                    sourceBinId: '', destinationBinId: '',
+                  })}>
+                    <SelectTrigger><SelectValue placeholder="Select warehouse" /></SelectTrigger>
+                    <SelectContent>
+                      {(warehouses || []).map((w: any) => (
+                        <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Assign To</Label>
+                  <Select value={newTask.assignedTo || 'none'} onValueChange={(v) => setNewTask({ ...newTask, assignedTo: v === 'none' ? '' : v })}>
+                    <SelectTrigger><SelectValue placeholder="Select worker" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {workers.map((w: any) => (
+                        <SelectItem key={w.id} value={w.id}>{w.fullName || w.full_name || w.email}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Common: Due Date + Time */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Due Date</Label>
+                  <Input type="date" value={newTask.dueDate} onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Due Time</Label>
+                  <Input type="time" value={newTask.dueTime} onChange={(e) => setNewTask({ ...newTask, dueTime: e.target.value })} />
+                </div>
+              </div>
+
+              {/* Common: Priority */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Priority</Label>
+                <Select value={newTask.priority} onValueChange={(value) => setNewTask({ ...newTask, priority: value })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="low">Low</SelectItem>
                     <SelectItem value="medium">Medium</SelectItem>
@@ -562,45 +740,264 @@ export default function OperationsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="quantity" className="text-right">
-                  Quantity
-                </Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  value={newTask.quantity}
-                  onChange={(e) => setNewTask({...newTask, quantity: safeParseInt(e.target.value, 1)})}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="instructions" className="text-right">
-                  Instructions
-                </Label>
-                <Textarea
-                  id="instructions"
-                  value={newTask.instructions}
-                  onChange={(e) => setNewTask({...newTask, instructions: e.target.value})}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="notes" className="text-right">
-                  Notes
-                </Label>
-                <Textarea
-                  id="notes"
-                  value={newTask.notes}
-                  onChange={(e) => setNewTask({...newTask, notes: e.target.value})}
-                  className="col-span-3"
-                />
+
+              {/* ═══ PICK-SPECIFIC FIELDS ═══ */}
+              {newTask.type === 'pick' && (
+                <>
+                  <div className="border-t pt-4">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pick Details</Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Linked Sales Order</Label>
+                    <Select value={newTask.linkedSoId || 'none'} onValueChange={(v) => setNewTask({ ...newTask, linkedSoId: v === 'none' ? '' : v })}>
+                      <SelectTrigger><SelectValue placeholder="Select SO" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {salesOrders.map((so: any) => (
+                          <SelectItem key={so.id} value={so.id}>{so.so_number || so.soNumber} — {so.customer_name || so.customerName || 'Customer'}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {newTask.warehouseId && (
+                    <>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Source Zone</Label>
+                        <Select value={newTask.zoneId || 'none'} onValueChange={(v) => setNewTask({ ...newTask, zoneId: v === 'none' ? '' : v, rackId: '', binId: '', sourceBinId: '' })}>
+                          <SelectTrigger><SelectValue placeholder="Select zone" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {(Array.isArray(zones) ? zones : []).map((z: any) => (
+                              <SelectItem key={z.id} value={z.id}>{z.name} ({z.code})</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {newTask.zoneId && (
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Source Rack</Label>
+                          <Select value={newTask.rackId || 'none'} onValueChange={(v) => setNewTask({ ...newTask, rackId: v === 'none' ? '' : v, binId: '', sourceBinId: '' })}>
+                            <SelectTrigger><SelectValue placeholder="Select rack" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              {(Array.isArray(racks) ? racks : []).map((r: any) => (
+                                <SelectItem key={r.id} value={r.id}>{r.name || r.code}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {newTask.rackId && (
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Source Bin</Label>
+                          <Select value={newTask.sourceBinId || 'none'} onValueChange={(v) => setNewTask({ ...newTask, sourceBinId: v === 'none' ? '' : v })}>
+                            <SelectTrigger><SelectValue placeholder="Select bin" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              {(Array.isArray(bins) ? bins : []).map((b: any) => (
+                                <SelectItem key={b.id} value={b.id}>{b.code || b.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Quantity</Label>
+                    <Input type="number" min="0" value={newTask.quantity} onChange={(e) => setNewTask({ ...newTask, quantity: safeParseInt(e.target.value, 0) })} />
+                  </div>
+                </>
+              )}
+
+              {/* ═══ PUTAWAY-SPECIFIC FIELDS ═══ */}
+              {newTask.type === 'putaway' && (
+                <>
+                  <div className="border-t pt-4">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Putaway Details</Label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Linked GRN</Label>
+                      <Select value={newTask.linkedGrnId || 'none'} onValueChange={(v) => setNewTask({ ...newTask, linkedGrnId: v === 'none' ? '' : v })}>
+                        <SelectTrigger><SelectValue placeholder="Select GRN" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {grns.map((g: any) => (
+                            <SelectItem key={g.id} value={g.id}>{g.grn_number || g.grnNumber}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Source Location</Label>
+                      <Select value={newTask.sourceLocation || 'none'} onValueChange={(v) => setNewTask({ ...newTask, sourceLocation: v === 'none' ? '' : v })}>
+                        <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="receiving_dock">Receiving Dock</SelectItem>
+                          <SelectItem value="qc_area">QC Area</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {newTask.warehouseId && (
+                    <>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Destination Zone</Label>
+                        <Select value={newTask.zoneId || 'none'} onValueChange={(v) => setNewTask({ ...newTask, zoneId: v === 'none' ? '' : v, rackId: '', binId: '', destinationBinId: '' })}>
+                          <SelectTrigger><SelectValue placeholder="Select zone" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {(Array.isArray(zones) ? zones : []).map((z: any) => (
+                              <SelectItem key={z.id} value={z.id}>{z.name} ({z.code})</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {newTask.zoneId && (
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Destination Rack</Label>
+                          <Select value={newTask.rackId || 'none'} onValueChange={(v) => setNewTask({ ...newTask, rackId: v === 'none' ? '' : v, binId: '', destinationBinId: '' })}>
+                            <SelectTrigger><SelectValue placeholder="Select rack" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              {(Array.isArray(racks) ? racks : []).map((r: any) => (
+                                <SelectItem key={r.id} value={r.id}>{r.name || r.code}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {newTask.rackId && (
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Destination Bin</Label>
+                          <Select value={newTask.destinationBinId || 'none'} onValueChange={(v) => setNewTask({ ...newTask, destinationBinId: v === 'none' ? '' : v })}>
+                            <SelectTrigger><SelectValue placeholder="Select bin" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              {(Array.isArray(bins) ? bins : []).map((b: any) => (
+                                <SelectItem key={b.id} value={b.id}>{b.code || b.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Quantity</Label>
+                    <Input type="number" min="0" value={newTask.quantity} onChange={(e) => setNewTask({ ...newTask, quantity: safeParseInt(e.target.value, 0) })} />
+                  </div>
+                </>
+              )}
+
+              {/* ═══ CYCLE COUNT-SPECIFIC FIELDS ═══ */}
+              {newTask.type === 'cycle_count' && (
+                <>
+                  <div className="border-t pt-4">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cycle Count Details</Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Count Scope</Label>
+                    <Select value={newTask.countScope} onValueChange={(v) => setNewTask({ ...newTask, countScope: v, zoneId: '', rackId: '', binId: '', skuId: '' })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="full_zone">Full Zone</SelectItem>
+                        <SelectItem value="specific_rack">Specific Rack</SelectItem>
+                        <SelectItem value="specific_bin">Specific Bin</SelectItem>
+                        <SelectItem value="sku_based">SKU Based</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Zone dropdown — shown for full_zone, specific_rack, specific_bin */}
+                  {['full_zone', 'specific_rack', 'specific_bin'].includes(newTask.countScope) && newTask.warehouseId && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Zone</Label>
+                      <Select value={newTask.zoneId || 'none'} onValueChange={(v) => setNewTask({ ...newTask, zoneId: v === 'none' ? '' : v, rackId: '', binId: '' })}>
+                        <SelectTrigger><SelectValue placeholder="Select zone" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {(Array.isArray(zones) ? zones : []).map((z: any) => (
+                            <SelectItem key={z.id} value={z.id}>{z.name} ({z.code})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {/* Rack dropdown — shown for specific_rack, specific_bin */}
+                  {['specific_rack', 'specific_bin'].includes(newTask.countScope) && newTask.zoneId && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Rack</Label>
+                      <Select value={newTask.rackId || 'none'} onValueChange={(v) => setNewTask({ ...newTask, rackId: v === 'none' ? '' : v, binId: '' })}>
+                        <SelectTrigger><SelectValue placeholder="Select rack" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {(Array.isArray(racks) ? racks : []).map((r: any) => (
+                            <SelectItem key={r.id} value={r.id}>{r.name || r.code}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {/* Bin dropdown — shown for specific_bin only */}
+                  {newTask.countScope === 'specific_bin' && newTask.rackId && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Bin</Label>
+                      <Select value={newTask.binId || 'none'} onValueChange={(v) => setNewTask({ ...newTask, binId: v === 'none' ? '' : v })}>
+                        <SelectTrigger><SelectValue placeholder="Select bin" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {(Array.isArray(bins) ? bins : []).map((b: any) => (
+                            <SelectItem key={b.id} value={b.id}>{b.code || b.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {/* SKU dropdown — shown for sku_based */}
+                  {newTask.countScope === 'sku_based' && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">SKU</Label>
+                      <Select value={newTask.skuId || 'none'} onValueChange={(v) => setNewTask({ ...newTask, skuId: v === 'none' ? '' : v })}>
+                        <SelectTrigger><SelectValue placeholder="Search SKU" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {(Array.isArray(skus) ? skus : []).map((s: any) => (
+                            <SelectItem key={s.id} value={s.id}>{s.sku_code || s.skuCode} — {s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ═══ PACK / TRANSFER FIELDS ═══ */}
+              {['pack', 'transfer'].includes(newTask.type) && (
+                <>
+                  <div className="border-t pt-4">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{newTask.type === 'pack' ? 'Pack' : 'Transfer'} Details</Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Quantity</Label>
+                    <Input type="number" min="0" value={newTask.quantity} onChange={(e) => setNewTask({ ...newTask, quantity: safeParseInt(e.target.value, 0) })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Instructions</Label>
+                    <Textarea value={newTask.instructions} onChange={(e) => setNewTask({ ...newTask, instructions: e.target.value })} placeholder="Task instructions..." rows={2} />
+                  </div>
+                </>
+              )}
+
+              {/* Common: Notes */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Notes</Label>
+                <Textarea value={newTask.notes} onChange={(e) => setNewTask({ ...newTask, notes: e.target.value })} placeholder="Additional notes..." rows={2} />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-                Cancel
-              </Button>
+              <Button variant="outline" onClick={() => { setShowCreateDialog(false); resetNewTask(); }}>Cancel</Button>
               <Button onClick={createTask}>Create Task</Button>
             </DialogFooter>
           </DialogContent>

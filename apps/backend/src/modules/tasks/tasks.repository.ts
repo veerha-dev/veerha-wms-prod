@@ -7,6 +7,7 @@ export class TasksRepository {
 
   private mapRow(row: any) {
     if (!row) return null;
+    const meta = row.metadata || {};
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -24,11 +25,11 @@ export class TasksRepository {
       assigned_to: row.assigned_to,
       assignedToId: row.assigned_to,
       createdBy: row.created_by,
-      quantity: row.metadata?.quantity || null,
-      notes: row.metadata?.notes || null,
+      quantity: meta.quantity != null ? meta.quantity : null,
+      notes: meta.notes || null,
       dueDate: row.due_date,
       due_at: row.due_date,
-      sla_breached: false,
+      sla_breached: row.due_date && !['completed', 'cancelled'].includes(row.status) && new Date(row.due_date) < new Date(),
       startedAt: row.started_at,
       started_at: row.started_at,
       completedAt: row.completed_at,
@@ -38,22 +39,74 @@ export class TasksRepository {
       updatedAt: row.updated_at,
       updated_at: row.updated_at,
       warehouse_id: row.warehouse_id || null,
+      // Extended metadata fields
+      linkedSoId: meta.linkedSoId || null,
+      linkedGrnId: meta.linkedGrnId || null,
+      sourceBinId: meta.sourceBinId || null,
+      destinationBinId: meta.destinationBinId || null,
+      zoneId: meta.zoneId || null,
+      rackId: meta.rackId || null,
+      binId: meta.binId || null,
+      skuId: meta.skuId || null,
+      countScope: meta.countScope || null,
+      sourceLocation: meta.sourceLocation || null,
+      recurrence: meta.recurrence || 'one_time',
+      repeatPattern: meta.repeatPattern || null,
+      daysOfWeek: meta.daysOfWeek || null,
+      // Joined display fields
+      warehouse: row.warehouse_name ? { name: row.warehouse_name } : null,
+      assignee: row.assignee_name ? { full_name: row.assignee_name } : null,
+      linkedSoNumber: row.linked_so_number || null,
+      linkedGrnNumber: row.linked_grn_number || null,
+      sourceBinCode: row.source_bin_code || null,
+      destinationBinCode: row.destination_bin_code || null,
+      zoneName: row.zone_name || null,
+      binCode: row.bin_code_ref || null,
     };
   }
 
   async findAll(tenantId: string, query: any): Promise<{ data: any[]; total: number }> {
-    const { page: rawPage = 1, limit = 50, search, status } = query;
+    const { page: rawPage = 1, limit = 50, search, status, type, priority, warehouseId, slaBreached } = query;
     const page = Math.max(1, rawPage || 1);
     const offset = (page - 1) * limit;
-    const conditions: string[] = ['tenant_id = $1'];
+    const conditions: string[] = ['t.tenant_id = $1'];
     const params: any[] = [tenantId];
     let idx = 2;
-    if (search) { conditions.push(`(task_number ILIKE $${idx} OR title ILIKE $${idx})`); params.push(`%${search}%`); idx++; }
-    if (status) { conditions.push(`status = $${idx}`); params.push(status); idx++; }
+    if (search) { conditions.push(`(t.task_number ILIKE $${idx} OR t.title ILIKE $${idx})`); params.push(`%${search}%`); idx++; }
+    if (status) { conditions.push(`t.status = $${idx}`); params.push(status); idx++; }
+    if (type) { conditions.push(`t.task_type = $${idx}`); params.push(type); idx++; }
+    if (priority) { conditions.push(`t.priority = $${idx}`); params.push(priority); idx++; }
+    if (warehouseId) { conditions.push(`t.warehouse_id = $${idx}`); params.push(warehouseId); idx++; }
+    if (slaBreached === 'true' || slaBreached === true) {
+      conditions.push(`t.due_date < NOW() AND t.status NOT IN ('completed', 'cancelled')`);
+    }
     const where = conditions.join(' AND ');
-    const countRes = await this.db.query(`SELECT COUNT(*) as count FROM tasks WHERE ${where}`, params);
+    const countRes = await this.db.query(`SELECT COUNT(*) as count FROM tasks t WHERE ${where}`, params);
     const total = parseInt(countRes.rows[0].count, 10);
-    const dataRes = await this.db.query(`SELECT * FROM tasks WHERE ${where} ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`, [...params, limit, offset]);
+    const dataRes = await this.db.query(
+      `SELECT t.*,
+        w.name as warehouse_name,
+        u.full_name as assignee_name,
+        so.so_number as linked_so_number,
+        g.grn_number as linked_grn_number,
+        sb.code as source_bin_code,
+        db.code as destination_bin_code,
+        z.name as zone_name,
+        b.code as bin_code_ref
+      FROM tasks t
+      LEFT JOIN warehouses w ON t.warehouse_id = w.id
+      LEFT JOIN users u ON t.assigned_to = u.id
+      LEFT JOIN sales_orders so ON (t.metadata->>'linkedSoId')::uuid = so.id
+      LEFT JOIN grn g ON (t.metadata->>'linkedGrnId')::uuid = g.id
+      LEFT JOIN bins sb ON (t.metadata->>'sourceBinId')::uuid = sb.id
+      LEFT JOIN bins db ON (t.metadata->>'destinationBinId')::uuid = db.id
+      LEFT JOIN zones z ON (t.metadata->>'zoneId')::uuid = z.id
+      LEFT JOIN bins b ON (t.metadata->>'binId')::uuid = b.id
+      WHERE ${where}
+      ORDER BY t.created_at DESC
+      LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...params, limit, offset],
+    );
     return { data: dataRes.rows.map(r => this.mapRow(r)), total };
   }
 
@@ -63,8 +116,11 @@ export class TasksRepository {
   }
 
   async countByTenant(tenantId: string): Promise<number> {
-    const res = await this.db.query(`SELECT COUNT(*) as count FROM tasks WHERE tenant_id = $1`, [tenantId]);
-    return parseInt(res.rows[0].count, 10);
+    const res = await this.db.query(
+      `SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(task_number, '[^0-9]', '', 'g') AS INTEGER)), 0) as max_num FROM tasks WHERE tenant_id = $1`,
+      [tenantId],
+    );
+    return parseInt(res.rows[0].max_num, 10);
   }
 
   async create(tenantId: string, dto: any): Promise<any> {
@@ -75,12 +131,30 @@ export class TasksRepository {
     const priority = dto.priority || 'medium';
     const assignedTo = dto.assignedTo || dto.assigned_to || null;
     const dueDate = dto.dueDate || dto.due_date || null;
-    const metadata = JSON.stringify({ quantity: dto.quantity || null, notes: dto.notes || null });
+    const warehouseId = dto.warehouseId || dto.warehouse_id || null;
+    const status = assignedTo ? 'assigned' : 'pending';
+    const metadata = JSON.stringify({
+      quantity: dto.quantity != null ? dto.quantity : null,
+      notes: dto.notes || null,
+      linkedSoId: dto.linkedSoId || dto.linked_so_id || null,
+      linkedGrnId: dto.linkedGrnId || dto.linked_grn_id || null,
+      sourceBinId: dto.sourceBinId || dto.source_bin_id || null,
+      destinationBinId: dto.destinationBinId || dto.destination_bin_id || null,
+      zoneId: dto.zoneId || dto.zone_id || null,
+      rackId: dto.rackId || dto.rack_id || null,
+      binId: dto.binId || dto.bin_id || null,
+      skuId: dto.skuId || dto.sku_id || null,
+      countScope: dto.countScope || dto.count_scope || null,
+      sourceLocation: dto.sourceLocation || dto.source_location || null,
+      recurrence: dto.recurrence || null,
+      repeatPattern: dto.repeatPattern || null,
+      daysOfWeek: dto.daysOfWeek || null,
+    });
 
     const res = await this.db.query(
-      `INSERT INTO tasks (tenant_id, task_number, title, description, task_type, priority, status, assigned_to, due_date, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9) RETURNING *`,
-      [tenantId, taskNumber, title, description, taskType, priority, assignedTo, dueDate, metadata],
+      `INSERT INTO tasks (tenant_id, task_number, title, description, task_type, priority, status, assigned_to, due_date, warehouse_id, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [tenantId, taskNumber, title, description, taskType, priority, status, assignedTo, dueDate, warehouseId, metadata],
     );
     return this.mapRow(res.rows[0]);
   }

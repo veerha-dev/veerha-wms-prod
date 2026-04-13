@@ -111,6 +111,16 @@ export function InvoiceForm({ open, onOpenChange, onSubmit, isLoading, defaultWa
     setNotes(''); setItems([emptyItem()]);
   };
 
+  useEffect(() => {
+    if (type === 'service') {
+      setItems([
+        { ...emptyItem(), description: 'Storage Charges', itemType: 'service' },
+        { ...emptyItem(), description: 'Handling Charges', itemType: 'service' },
+        { ...emptyItem(), description: 'Value-Added Services', itemType: 'service' },
+      ]);
+    }
+  }, [type]);
+
   const addItem = () => setItems(prev => [...prev, emptyItem()]);
   const removeItem = (idx: number) => setItems(prev => prev.filter((_, i) => i !== idx));
   const updateItem = (idx: number, field: keyof LineItem, value: any) => {
