@@ -52,6 +52,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import { useWMS } from '@/shared/contexts/WMSContext';
 import { useUsers, useUpdateUser, useInviteUser } from '@/features/users/hooks/useUsers';
+import { useWarehouses } from '@/features/warehouse/hooks/useWarehouses';
 import { WMSUser } from '@/shared/types/users';
 import { UserProfilePanel } from '@/features/users/components/UserProfilePanel';
 import { InviteUserDialog } from '@/features/users/components/InviteUserDialog';
@@ -72,17 +73,14 @@ const statusConfig = {
   suspended: { label: 'Suspended', color: 'bg-destructive/10 text-destructive border-destructive/20' },
 };
 
-const warehouses = [
-  { id: 'wh-1', name: 'Mumbai Central' },
-  { id: 'wh-2', name: 'Delhi Hub' },
-  { id: 'wh-3', name: 'Bangalore DC' },
-];
 
 export default function UsersPage() {
   const { currentUser } = useWMS();
   const { data: users = [], isLoading } = useUsers();
   const updateUser = useUpdateUser();
   const inviteUser = useInviteUser();
+  const { data: warehousesData } = useWarehouses();
+  const warehouses = (warehousesData || []).map((w: any) => ({ id: w.id, name: w.name }));
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
