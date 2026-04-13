@@ -98,7 +98,7 @@ export default function UsersPage() {
     phone: user.phone || '',
     role: user.role || 'worker',
     status: (user.isActive ?? user.is_active) ? 'active' : 'disabled',
-    warehouseAccess: [],
+    warehouseAccess: user.warehouseId || user.warehouse_id ? [user.warehouseId || user.warehouse_id] : [],
     createdBy: 'System',
     createdAt: new Date(user.createdAt || user.created_at),
     lastLogin: (user.lastActiveAt || user.last_active_at) ? new Date(user.lastActiveAt || user.last_active_at) : new Date(),
@@ -329,7 +329,13 @@ export default function UsersPage() {
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="text-sm">{user.warehouseAccess.length} warehouses</span>
+                          <span className="text-sm text-muted-foreground">
+                            {user.role === 'admin'
+                              ? 'All warehouses'
+                              : user.warehouseAccess.length > 0
+                                ? warehouses.find((w: any) => w.id === user.warehouseAccess[0])?.name || '1 warehouse'
+                                : 'No warehouse'}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell>
