@@ -111,6 +111,7 @@ export class SettingsService {
     return {
       id: row.id,
       companyName: row.company_name || row.name,
+      companyType: row.company_type || null,
       name: row.name,
       industry: row.industry || null,
       address: row.address || null,
@@ -132,20 +133,30 @@ export class SettingsService {
 
   async updateTenantInfo(tenantId: string, dto: UpdateTenantInfoDto) {
     const featureFlagsUpdate = dto.industry
-      ? `feature_flags = jsonb_set(COALESCE(feature_flags, '{}'), '{industry}', to_jsonb($7::text)),`
+      ? `feature_flags = jsonb_set(COALESCE(feature_flags, '{}'), '{industry}', to_jsonb($8::text)),`
       : '';
 
-    const result = await this.db.query(
+    await this.db.query(
       `UPDATE tenants SET
         company_name = COALESCE($2, company_name),
-        address      = COALESCE($3, address),
-        city         = COALESCE($4, city),
-        country      = COALESCE($5, country),
-        gst_number   = COALESCE($6, gst_number),
+        company_type = COALESCE($3, company_type),
+        address      = COALESCE($4, address),
+        city         = COALESCE($5, city),
+        country      = COALESCE($6, country),
+        gst_number   = COALESCE($7, gst_number),
         ${featureFlagsUpdate}
         updated_at   = NOW()
        WHERE id = $1`,
-      [tenantId, dto.companyName || null, dto.address || null, dto.city || null, dto.country || null, dto.gstNumber || null, dto.industry || null],
+      [
+        tenantId,
+        dto.companyName || null,
+        dto.companyType || null,
+        dto.address || null,
+        dto.city || null,
+        dto.country || null,
+        dto.gstNumber || null,
+        dto.industry || null,
+      ],
     );
     return this.getTenantInfo(tenantId);
   }

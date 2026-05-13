@@ -1,12 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { GrnRepository } from './grn.repository';
 import { getCurrentTenantId } from '../common/tenant.context';
+import { InvoicesService } from '../invoices/invoices.service';
 
 interface AuthUser { id: string; role: string; warehouseId?: string | null }
 
 @Injectable()
 export class GrnService {
-  constructor(private repository: GrnRepository) {}
+  private readonly logger = new Logger(GrnService.name);
+
+  constructor(
+    private repository: GrnRepository,
+    private invoices: InvoicesService,
+  ) {}
 
 
   async findAll(query: any, user?: AuthUser) {
@@ -47,8 +53,26 @@ export class GrnService {
   }
 
   async updateStatus(id: string, status: string, extraFields?: Record<string, any>) {
-    await this.findOne(id);
-    return this.repository.updateStatus(id, getCurrentTenantId(), status, extraFields);
+    const before = await this.findOne(id);
+    const updated = await this.repository.updateStatus(id, getCurrentTenantId(), status, extraFields);
+
+    // Auto-create Purchase Invoice exactly once when GRN transitions to `completed`.
+    // Idempotency is enforced by a unique index on (grn_id) where type='purchase', so even if this
+    // fires twice the second call returns the existing invoice rather than duplicating.
+    if (status === 'completed' && before.status !== 'completed') {
+      try {
+        const result = await this.invoices.createFromGrn(id);
+        if (result.created) {
+          this.logger.log(`Auto-created purchase invoice ${result.invoice.invoiceNumber} for GRN ${id}`);
+        }
+      } catch (err) {
+        // Don't fail the GRN status update if invoice creation has a non-fatal issue.
+        // The user can always re-trigger via POST /invoices/from-grn/:grnId.
+        this.logger.error(`Auto-invoice from GRN ${id} failed`, err as Error);
+      }
+    }
+
+    return updated;
   }
 
   private async generateCode(): Promise<string> {

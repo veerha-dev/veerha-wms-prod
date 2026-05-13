@@ -33,6 +33,7 @@ export class UpdateSecurityPrefsDto {
 
 export class UpdateTenantInfoDto {
   @IsOptional() @IsString() companyName?: string;
+  @IsOptional() @IsString() companyType?: string;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsString() city?: string;
   @IsOptional() @IsString() country?: string;

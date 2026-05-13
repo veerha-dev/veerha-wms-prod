@@ -64,6 +64,17 @@ export class PutawayService {
     const tasks: any[] = [];
     for (const item of itemsRes.rows) {
       const putawayNumber = await this.generateCode();
+
+      // Pre-fill the suggested bin using the §3.2 Step 4 scoring rules. The worker can still
+      // override the destination at execution time.
+      let suggestedBinId: string | null = null;
+      try {
+        const suggestions = await this.repository.suggestBins(grn.warehouse_id, item.sku_id);
+        suggestedBinId = suggestions[0]?.binId || null;
+      } catch {
+        // Suggestion is best-effort — if it fails the task is still created without a default bin.
+      }
+
       const task = await this.repository.create(getCurrentTenantId(), {
         putawayNumber,
         grnId: grn.id,
@@ -72,6 +83,7 @@ export class PutawayService {
         batchId: item.batch_id || null,
         quantity: item.quantity_received || item.quantity_expected,
         warehouseId: grn.warehouse_id,
+        suggestedBinId,
         priority: 'normal',
         notes: `Auto-generated from GRN ${grn.grn_number}`,
       });

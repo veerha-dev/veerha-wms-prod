@@ -1,13 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ShipmentsRepository } from './shipments.repository';
 import { getCurrentTenantId } from '../common/tenant.context';
+import { InvoicesService } from '../invoices/invoices.service';
 
-
-
+const DISPATCH_STATUSES = new Set(['in_transit', 'in-transit', 'dispatched', 'delivered']);
 
 @Injectable()
 export class ShipmentsService {
-  constructor(private repository: ShipmentsRepository) {}
+  private readonly logger = new Logger(ShipmentsService.name);
+
+  constructor(
+    private repository: ShipmentsRepository,
+    private invoices: InvoicesService,
+  ) {}
 
 
   async findAll(query: any) {
@@ -45,8 +50,26 @@ export class ShipmentsService {
   }
 
   async updateStatus(id: string, status: string, extraFields?: Record<string, any>) {
-    await this.findOne(id);
-    return this.repository.updateStatus(id, getCurrentTenantId(), status, extraFields);
+    const before = await this.findOne(id);
+    const updated = await this.repository.updateStatus(id, getCurrentTenantId(), status, extraFields);
+
+    // Auto-create Sales Invoice when shipment is dispatched (first time it enters in_transit or
+    // a downstream status). Idempotency is enforced by a unique index on (shipment_id) where
+    // type='sales'.
+    const wasDispatched = DISPATCH_STATUSES.has((before.status || '').toLowerCase());
+    const nowDispatched = DISPATCH_STATUSES.has(status.toLowerCase());
+    if (nowDispatched && !wasDispatched) {
+      try {
+        const result = await this.invoices.createFromShipment(id);
+        if (result.created) {
+          this.logger.log(`Auto-created sales invoice ${result.invoice.invoiceNumber} for Shipment ${id}`);
+        }
+      } catch (err) {
+        this.logger.error(`Auto-invoice from Shipment ${id} failed`, err as Error);
+      }
+    }
+
+    return updated;
   }
 
   private async generateCode(): Promise<string> {

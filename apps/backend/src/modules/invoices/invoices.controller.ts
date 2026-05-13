@@ -30,6 +30,24 @@ export class InvoicesController {
     return { success: true, data };
   }
 
+  @Post('from-grn/:grnId')
+  async createFromGrn(@Param('grnId') grnId: string) {
+    const { invoice, created } = await this.service.createFromGrn(grnId);
+    return { success: true, data: invoice, meta: { created } };
+  }
+
+  @Post('from-shipment/:shipmentId')
+  async createFromShipment(@Param('shipmentId') shipmentId: string) {
+    const { invoice, created } = await this.service.createFromShipment(shipmentId);
+    return { success: true, data: invoice, meta: { created } };
+  }
+
+  @Post('service')
+  async createServiceInvoice(@Body() body: any) {
+    const data = await this.service.createServiceInvoice(body);
+    return { success: true, data };
+  }
+
   @Put(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateInvoiceDto) {
     const data = await this.service.update(id, dto);

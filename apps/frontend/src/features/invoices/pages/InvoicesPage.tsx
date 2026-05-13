@@ -14,6 +14,9 @@ import {
 } from '@/features/invoices/hooks/useInvoices';
 import { useWarehouses } from '@/features/warehouse/hooks/useWarehouses';
 import { InvoiceForm } from '@/features/invoices/components/InvoiceForm';
+import { downloadInvoicePdf } from '@/features/invoices/lib/invoicePdf';
+import { ServiceInvoiceDialog } from '@/features/invoices/components/ServiceInvoiceDialog';
+import { useTenantSettings } from '@/features/settings/hooks/useSettings';
 
 export default function InvoicesPage() {
   const { user } = useAuth();
@@ -40,9 +43,12 @@ export default function InvoicesPage() {
   });
   const { data: stats } = useInvoiceStats(effectiveWarehouseId);
   const { data: warehouses } = useWarehouses();
+  const { data: tenant } = useTenantSettings();
   const createInvoice = useCreateInvoice();
   const updateStatus = useUpdateInvoiceStatus();
   const deleteInvoice = useDeleteInvoice();
+  const [serviceOpen, setServiceOpen] = useState(false);
+  const is3PL = (tenant?.companyType || '').toLowerCase() === '3pl';
 
   const invoices = invoicesData?.data || invoicesData || [];
 
@@ -76,38 +82,12 @@ export default function InvoicesPage() {
   const formatDate = (d: string) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
 
   const handlePrintInvoice = (inv: any) => {
-    const w = window.open('', '_blank', 'width=800,height=600');
-    if (!w) return;
-    const gstLabel = inv.gstType === 'inter-state' ? `IGST: ${formatCurrency(inv.igstAmount)}` : `CGST: ${formatCurrency(inv.cgstAmount)} | SGST: ${formatCurrency(inv.sgstAmount)}`;
-    w.document.write(`
-      <html><head><title>Invoice ${inv.invoiceNumber}</title>
-      <style>body{font-family:Arial,sans-serif;padding:40px;color:#333}
-      h1{font-size:24px;margin-bottom:4px}
-      .meta{display:flex;justify-content:space-between;margin:20px 0}
-      .meta div{font-size:13px}
-      .totals{text-align:right;margin-top:20px;font-size:13px}
-      .totals div{margin:4px 0}
-      .total-line{font-size:16px;font-weight:bold;border-top:2px solid #333;padding-top:8px;margin-top:8px}
-      @media print{body{padding:20px}}</style></head><body>
-      <h1>INVOICE</h1>
-      <p style="color:#666;margin:0">${inv.invoiceNumber} | ${inv.type?.toUpperCase()} INVOICE</p>
-      <div class="meta">
-        <div><strong>${inv.type === 'purchase' ? 'Supplier' : 'Customer'}:</strong><br/>${inv.customer?.name || inv.supplier?.name || '-'}</div>
-        <div><strong>Date:</strong> ${formatDate(inv.invoiceDate)}<br/><strong>Due:</strong> ${formatDate(inv.dueDate)}<br/><strong>Terms:</strong> ${inv.paymentTerms} days</div>
-      </div>
-      ${inv.purchaseOrder?.poNumber ? `<p><strong>PO:</strong> ${inv.purchaseOrder.poNumber}</p>` : ''}
-      ${inv.salesOrder?.soNumber ? `<p><strong>SO:</strong> ${inv.salesOrder.soNumber}</p>` : ''}
-      <div class="totals">
-        <div>Subtotal: ${formatCurrency(inv.subtotal)}</div>
-        ${inv.discountAmount > 0 ? `<div>Discount: -${formatCurrency(inv.discountAmount)}</div>` : ''}
-        <div>${gstLabel}</div>
-        <div class="total-line">Grand Total: ${formatCurrency(inv.totalAmount)}</div>
-      </div>
-      <p style="margin-top:30px;font-size:11px;color:#999">Generated on ${new Date().toLocaleDateString()}</p>
-      </body></html>
-    `);
-    w.document.close();
-    w.print();
+    downloadInvoicePdf(inv, {
+      companyName: tenant?.companyName,
+      gstNumber: tenant?.gstNumber,
+      address: tenant?.address,
+      city: tenant?.city,
+    });
   };
 
   return (
@@ -119,7 +99,14 @@ export default function InvoicesPage() {
             <h1 className="text-3xl font-bold">Invoices</h1>
             <p className="text-muted-foreground">Manage purchase, sales, and service invoices with GST</p>
           </div>
-          <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-2" />New Invoice</Button>
+          <div className="flex gap-2">
+            {is3PL && (
+              <Button variant="outline" onClick={() => setServiceOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />Service Invoice
+              </Button>
+            )}
+            <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-2" />New Invoice</Button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -220,7 +207,16 @@ export default function InvoicesPage() {
                 <TableBody>
                   {(Array.isArray(invoices) ? invoices : []).map((inv: any) => (
                     <TableRow key={inv.id}>
-                      <TableCell className="font-medium">{inv.invoiceNumber}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <span>{inv.invoiceNumber}</span>
+                          {inv.sourceEvent && inv.sourceEvent !== 'manual' && (
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 bg-blue-50 text-blue-700 border-blue-200">
+                              auto
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>{getTypeBadge(inv.type)}</TableCell>
                       <TableCell className="text-sm">
                         {inv.type === 'purchase' ? inv.supplier?.name || '-' : inv.customer?.name || '-'}
@@ -279,6 +275,13 @@ export default function InvoicesPage() {
         isLoading={createInvoice.isPending}
         defaultWarehouseId={isManager ? user?.warehouseId || '' : ''}
         isManager={isManager}
+      />
+
+      {/* Service Invoice (3PL only) */}
+      <ServiceInvoiceDialog
+        open={serviceOpen}
+        onOpenChange={setServiceOpen}
+        warehouses={warehouses || []}
       />
     </AppLayout>
   );

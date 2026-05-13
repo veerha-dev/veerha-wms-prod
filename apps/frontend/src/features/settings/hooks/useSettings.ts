@@ -28,6 +28,7 @@ export interface UserPreferences {
 export interface TenantSettings {
   id: string;
   companyName: string;
+  companyType: string | null;
   name: string;
   industry: string | null;
   address: string | null;
