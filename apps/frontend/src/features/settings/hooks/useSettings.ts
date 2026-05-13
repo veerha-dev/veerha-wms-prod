@@ -146,6 +146,46 @@ export function useUpdateSecurityPrefs() {
 
 // ─── Tenant ───────────────────────────────────────────────────────────────────
 
+export interface SecurityPolicy {
+  passwordMinLength: number;
+  passwordRequireUpper: boolean;
+  passwordRequireLower: boolean;
+  passwordRequireDigit: boolean;
+  passwordRequireSpecial: boolean;
+  passwordExpiryDays: number;
+  sessionTimeoutMinutes: number;
+  failedLoginLockoutCount: number;
+  failedLoginLockoutMinutes: number;
+  require2faForAdmins: boolean;
+  require2faForAll: boolean;
+}
+
+export function useSecurityPolicy() {
+  const { isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: ['security-policy'],
+    queryFn: async (): Promise<SecurityPolicy> => {
+      const { data } = await api.get('/api/v1/settings/security-policy');
+      return data.data;
+    },
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useUpdateSecurityPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: Partial<SecurityPolicy>) =>
+      api.patch('/api/v1/settings/security-policy', dto).then((r) => r.data.data),
+    onSuccess: (data) => {
+      qc.setQueryData(['security-policy'], data);
+      toast.success('Security policy updated');
+    },
+    onError: (e: any) => toast.error(e.response?.data?.message || 'Failed to save'),
+  });
+}
+
 export function useTenantSettings() {
   const { isAuthenticated } = useAuth();
   return useQuery({

@@ -62,6 +62,21 @@ export class SettingsController {
     return { success: true, data };
   }
 
+  // ─── Tenant Security Policy ─────────────────────────────────────────────────
+
+  @Get('security-policy')
+  async getSecurityPolicy() {
+    const data = await this.service.getSecurityPolicy(getCurrentTenantId());
+    return { success: true, data };
+  }
+
+  @Patch('security-policy')
+  async updateSecurityPolicy(@Request() req: any, @Body() body: Record<string, any>) {
+    if (req.user.role !== 'admin') throw new ForbiddenException('Only admins can update the security policy');
+    const data = await this.service.updateSecurityPolicy(getCurrentTenantId(), body);
+    return { success: true, data };
+  }
+
   // ─── Integrations ────────────────────────────────────────────────────────────
 
   @Get('integrations')

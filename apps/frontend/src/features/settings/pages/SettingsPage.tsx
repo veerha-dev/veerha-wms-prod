@@ -8,7 +8,8 @@ import {
   usePreferences, useUpdateGeneral, useUpdateNotifications, useUpdateSecurityPrefs,
   useTenantSettings, useUpdateTenantInfo, useIntegrations, useUpdateIntegration,
   useSendTestNotification, useUpdateProfile, useChangePassword,
-  UserPreferences, TenantSettings, Integration,
+  useSecurityPolicy, useUpdateSecurityPolicy,
+  UserPreferences, TenantSettings, Integration, SecurityPolicy,
 } from '@/features/settings/hooks/useSettings';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
@@ -507,6 +508,78 @@ function SecurityTab({ prefs, user, signOut }: { prefs?: UserPreferences; user: 
           </Button>
         </div>
       </div>
+
+      {/* Tenant Password Policy (admin only) */}
+      {user?.role === 'admin' && <TenantPasswordPolicyCard />}
+    </div>
+  );
+}
+
+// ─── Tenant Password Policy (admin only) ──────────────────────────────────────
+
+function TenantPasswordPolicyCard() {
+  const { data: policy, isLoading } = useSecurityPolicy();
+  const update = useUpdateSecurityPolicy();
+  const [form, setForm] = useState<Partial<SecurityPolicy> | null>(null);
+
+  useEffect(() => {
+    if (policy) setForm(policy);
+  }, [policy]);
+
+  if (isLoading || !form) {
+    return <div className="wms-card p-5 text-sm text-muted-foreground">Loading password policy…</div>;
+  }
+
+  const setBool = (k: keyof SecurityPolicy) => (val: boolean) => setForm((f) => ({ ...f!, [k]: val }));
+  const setNum = (k: keyof SecurityPolicy) => (e: any) => setForm((f) => ({ ...f!, [k]: parseInt(e.target.value || '0', 10) }));
+
+  return (
+    <div className="wms-card p-5 space-y-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-semibold">Tenant Password Policy</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Applies to all users in this tenant. Enforced on password change.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => update.mutate(form!)} disabled={update.isPending} className="gap-2">
+          {update.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          Save Policy
+        </Button>
+      </div>
+      <Separator />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Minimum length">
+          <Input type="number" min={4} max={64} value={form.passwordMinLength ?? 8} onChange={setNum('passwordMinLength')} />
+        </Field>
+        <Field label="Password expiry (days, 0 = never)">
+          <Input type="number" min={0} value={form.passwordExpiryDays ?? 0} onChange={setNum('passwordExpiryDays')} />
+        </Field>
+        <Field label="Session timeout (minutes)">
+          <Input type="number" min={5} value={form.sessionTimeoutMinutes ?? 30} onChange={setNum('sessionTimeoutMinutes')} />
+        </Field>
+        <Field label="Lockout after failed attempts">
+          <Input type="number" min={1} value={form.failedLoginLockoutCount ?? 5} onChange={setNum('failedLoginLockoutCount')} />
+        </Field>
+      </div>
+      <Separator />
+      <div className="space-y-2">
+        <PolicyToggle label="Require uppercase letter" checked={!!form.passwordRequireUpper} onChange={setBool('passwordRequireUpper')} />
+        <PolicyToggle label="Require lowercase letter" checked={!!form.passwordRequireLower} onChange={setBool('passwordRequireLower')} />
+        <PolicyToggle label="Require digit" checked={!!form.passwordRequireDigit} onChange={setBool('passwordRequireDigit')} />
+        <PolicyToggle label="Require special character" checked={!!form.passwordRequireSpecial} onChange={setBool('passwordRequireSpecial')} />
+        <PolicyToggle label="Require 2FA for admins" checked={!!form.require2faForAdmins} onChange={setBool('require2faForAdmins')} />
+        <PolicyToggle label="Require 2FA for all users" checked={!!form.require2faForAll} onChange={setBool('require2faForAll')} />
+      </div>
+    </div>
+  );
+}
+
+function PolicyToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between rounded border p-2">
+      <span className="text-sm">{label}</span>
+      <Switch checked={checked} onCheckedChange={onChange} />
     </div>
   );
 }

@@ -135,12 +135,23 @@ export class UsersService {
     return result;
   }
 
+  async forceLogout(id: string) {
+    const user = await this.findById(id);
+    await this.db.query(
+      `UPDATE users SET token_version = COALESCE(token_version, 0) + 1, updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2`,
+      [id, getCurrentTenantId()],
+    );
+    return { id: user.id, forcedLogout: true };
+  }
+
   async resetPassword(id: string) {
     const user = await this.findById(id);
     const tempPassword = this.generateTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 12);
     await this.db.query(
-      `UPDATE users SET password_hash = $1, must_change_password = true, updated_at = NOW()
+      `UPDATE users SET password_hash = $1, must_change_password = true,
+                        token_version = COALESCE(token_version, 0) + 1, updated_at = NOW()
        WHERE id = $2 AND tenant_id = $3`,
       [passwordHash, id, getCurrentTenantId()],
     );

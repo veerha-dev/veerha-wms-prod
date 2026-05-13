@@ -51,7 +51,8 @@ import {
 } from '@/shared/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import { useWMS } from '@/shared/contexts/WMSContext';
-import { useUsers, useUpdateUser, useInviteUser } from '@/features/users/hooks/useUsers';
+import { useUsers, useUpdateUser, useInviteUser, useResetUserPassword, useForceLogout, useDeactivateUser, useReactivateUser } from '@/features/users/hooks/useUsers';
+import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 import { useWarehouses } from '@/features/warehouse/hooks/useWarehouses';
 import { WMSUser } from '@/shared/types/users';
 import { UserProfilePanel } from '@/features/users/components/UserProfilePanel';
@@ -79,6 +80,12 @@ export default function UsersPage() {
   const { data: users = [], isLoading } = useUsers();
   const updateUser = useUpdateUser();
   const inviteUser = useInviteUser();
+  const resetPw = useResetUserPassword();
+  const forceLogout = useForceLogout();
+  const deactivate = useDeactivateUser();
+  const reactivate = useReactivateUser();
+  const [confirmForceLogout, setConfirmForceLogout] = useState<{ id: string; name: string } | null>(null);
+  const [confirmReset, setConfirmReset] = useState<{ id: string; name: string } | null>(null);
   const { data: warehousesData } = useWarehouses();
   const warehouses = (warehousesData || []).map((w: any) => ({ id: w.id, name: w.name }));
   const [searchQuery, setSearchQuery] = useState('');
@@ -363,18 +370,27 @@ export default function UsersPage() {
                             {isAdmin && (
                               <>
                                 <DropdownMenuItem><Edit className="h-4 w-4 mr-2" />Edit</DropdownMenuItem>
-                                <DropdownMenuItem><Key className="h-4 w-4 mr-2" />Reset Password</DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setConfirmReset({ id: user.id, name: user.name || user.email })}
+                                >
+                                  <Key className="h-4 w-4 mr-2" />Reset Password
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {user.status === 'active' ? (
-                                  <DropdownMenuItem><XCircle className="h-4 w-4 mr-2" />Disable</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => deactivate.mutate(user.id)}>
+                                    <XCircle className="h-4 w-4 mr-2" />Disable
+                                  </DropdownMenuItem>
                                 ) : (
-                                  <DropdownMenuItem><CheckCircle2 className="h-4 w-4 mr-2" />Enable</DropdownMenuItem>
-                                )}
-                                {user.activeSessions > 0 && (
-                                  <DropdownMenuItem className="text-destructive">
-                                    <LogOut className="h-4 w-4 mr-2" />Force Logout
+                                  <DropdownMenuItem onClick={() => reactivate.mutate(user.id)}>
+                                    <CheckCircle2 className="h-4 w-4 mr-2" />Enable
                                   </DropdownMenuItem>
                                 )}
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={() => setConfirmForceLogout({ id: user.id, name: user.name || user.email })}
+                                >
+                                  <LogOut className="h-4 w-4 mr-2" />Force Logout
+                                </DropdownMenuItem>
                               </>
                             )}
                           </DropdownMenuContent>
@@ -420,6 +436,33 @@ export default function UsersPage() {
         sessions={[]}
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={!!confirmForceLogout}
+        onOpenChange={(o) => { if (!o) setConfirmForceLogout(null); }}
+        title="Force logout?"
+        description={confirmForceLogout ? `Invalidate all active sessions for ${confirmForceLogout.name}. They will need to log in again.` : ''}
+        confirmText="Force logout"
+        variant="destructive"
+        isLoading={forceLogout.isPending}
+        onConfirm={() => {
+          if (confirmForceLogout) forceLogout.mutate(confirmForceLogout.id);
+          setConfirmForceLogout(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!confirmReset}
+        onOpenChange={(o) => { if (!o) setConfirmReset(null); }}
+        title="Reset password?"
+        description={confirmReset ? `A new temporary password will be emailed to ${confirmReset.name}. Their current sessions will be invalidated.` : ''}
+        confirmText="Reset and email"
+        isLoading={resetPw.isPending}
+        onConfirm={() => {
+          if (confirmReset) resetPw.mutate(confirmReset.id);
+          setConfirmReset(null);
+        }}
       />
     </AppLayout>
   );

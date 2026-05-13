@@ -65,3 +65,24 @@ export function useInviteUser() {
     onError: (e: any) => toast.error(`Failed: ${e.response?.data?.error?.message || e.message}`),
   });
 }
+
+export function useResetUserPassword() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => { const { data } = await api.post(`/api/v1/users/${id}/reset-password`); return data.data; },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success('Password reset — temporary password sent by email');
+    },
+    onError: (e: any) => toast.error(`Failed: ${e.response?.data?.error?.message || e.message}`),
+  });
+}
+
+export function useForceLogout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => { const { data } = await api.post(`/api/v1/users/${id}/force-logout`); return data.data; },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['users'] }); toast.success('User signed out everywhere'); },
+    onError: (e: any) => toast.error(`Failed: ${e.response?.data?.error?.message || e.message}`),
+  });
+}

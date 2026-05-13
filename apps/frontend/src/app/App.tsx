@@ -51,6 +51,7 @@ import ExpiryReportPage from "@/features/reports/pages/reports/ExpiryReportPage"
 import LowStockReportPage from "@/features/reports/pages/reports/LowStockReportPage";
 import WarehouseUtilizationPage from "@/features/reports/pages/reports/WarehouseUtilizationPage";
 import AuditTrailPage from "@/features/reports/pages/reports/AuditTrailPage";
+import SystemAuditLogPage from "@/features/audit/pages/SystemAuditLogPage";
 // Settings & Users
 import UsersPage from "@/features/users/pages/UsersPage";
 import SettingsPage from "@/features/settings/pages/SettingsPage";
@@ -140,6 +141,7 @@ const App = () => (
             <Route path="/reports/low-stock" element={<ProtectedLayout><LowStockReportPage /></ProtectedLayout>} />
             <Route path="/reports/warehouse-utilization" element={<ProtectedLayout><WarehouseUtilizationPage /></ProtectedLayout>} />
             <Route path="/reports/audit-trail" element={<ProtectedLayout><AuditTrailPage /></ProtectedLayout>} />
+            <Route path="/reports/system-audit" element={<ProtectedLayout><SystemAuditLogPage /></ProtectedLayout>} />
             
             <Route path="/admin/modules" element={<ProtectedLayout><ModuleManagementPage /></ProtectedLayout>} />
             

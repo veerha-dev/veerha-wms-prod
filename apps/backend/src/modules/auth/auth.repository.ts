@@ -8,7 +8,7 @@ export class AuthRepository {
   async findUserByEmail(email: string) {
     const result = await this.db.query(
       `SELECT id, email, full_name, role, tenant_id, is_active, password_hash,
-              must_change_password, warehouse_id, phone
+              must_change_password, warehouse_id, phone, token_version
        FROM users
        WHERE email = $1`,
       [email]
@@ -29,12 +29,19 @@ export class AuthRepository {
   async findUserById(id: string) {
     const result = await this.db.query(
       `SELECT id, email, full_name, role, tenant_id, is_active, last_login,
-              must_change_password, warehouse_id, phone, created_at, updated_at
+              must_change_password, warehouse_id, phone, token_version, created_at, updated_at
        FROM users
        WHERE id = $1`,
       [id]
     );
     return result.rows[0] || null;
+  }
+
+  async bumpTokenVersion(userId: string) {
+    await this.db.query(
+      `UPDATE users SET token_version = COALESCE(token_version, 0) + 1, updated_at = NOW() WHERE id = $1`,
+      [userId]
+    );
   }
 
   async updateLastLogin(userId: string) {

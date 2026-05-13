@@ -77,6 +77,13 @@ export class UsersController {
     return { success: true, data };
   }
 
+  @Post(':id/force-logout')
+  @UseGuards(JwtAuthGuard)
+  async forceLogout(@Param('id') id: string) {
+    const data = await this.service.forceLogout(id);
+    return { success: true, data };
+  }
+
   @Put(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     const data = await this.service.update(id, dto);

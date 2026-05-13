@@ -131,6 +131,77 @@ export class SettingsService {
     };
   }
 
+  // ─── Tenant Security Policy ─────────────────────────────────────────────────
+
+  async getSecurityPolicy(tenantId: string) {
+    // Lazy-create defaults if missing
+    await this.db.query(
+      `INSERT INTO tenant_security_settings (tenant_id) VALUES ($1) ON CONFLICT (tenant_id) DO NOTHING`,
+      [tenantId],
+    );
+    const res = await this.db.query(
+      `SELECT * FROM tenant_security_settings WHERE tenant_id = $1`,
+      [tenantId],
+    );
+    return mapPolicy(res.rows[0]);
+  }
+
+  async updateSecurityPolicy(tenantId: string, dto: Record<string, any>) {
+    const allowed: Record<string, string> = {
+      passwordMinLength: 'password_min_length',
+      passwordRequireUpper: 'password_require_upper',
+      passwordRequireLower: 'password_require_lower',
+      passwordRequireDigit: 'password_require_digit',
+      passwordRequireSpecial: 'password_require_special',
+      passwordExpiryDays: 'password_expiry_days',
+      sessionTimeoutMinutes: 'session_timeout_minutes',
+      failedLoginLockoutCount: 'failed_login_lockout_count',
+      failedLoginLockoutMinutes: 'failed_login_lockout_minutes',
+      require2faForAdmins: 'require_2fa_for_admins',
+      require2faForAll: 'require_2fa_for_all',
+    };
+    const sets: string[] = [];
+    const vals: any[] = [];
+    let i = 1;
+    for (const [k, v] of Object.entries(dto)) {
+      const col = allowed[k];
+      if (!col || v === undefined) continue;
+      sets.push(`${col} = $${i++}`);
+      vals.push(v);
+    }
+    if (sets.length === 0) return this.getSecurityPolicy(tenantId);
+
+    // Ensure row exists
+    await this.db.query(
+      `INSERT INTO tenant_security_settings (tenant_id) VALUES ($1) ON CONFLICT (tenant_id) DO NOTHING`,
+      [tenantId],
+    );
+
+    vals.push(tenantId);
+    await this.db.query(
+      `UPDATE tenant_security_settings SET ${sets.join(', ')}, updated_at = NOW() WHERE tenant_id = $${i}`,
+      vals,
+    );
+    return this.getSecurityPolicy(tenantId);
+  }
+
+  /**
+   * Validate a candidate password against the tenant policy.
+   * Throws an Error (caller decides which Nest exception to throw) listing every failed rule.
+   */
+  async validatePasswordAgainstPolicy(tenantId: string, password: string): Promise<{ ok: boolean; problems: string[] }> {
+    const policy = await this.getSecurityPolicy(tenantId);
+    const problems: string[] = [];
+    if (password.length < policy.passwordMinLength) {
+      problems.push(`At least ${policy.passwordMinLength} characters`);
+    }
+    if (policy.passwordRequireUpper && !/[A-Z]/.test(password)) problems.push('At least one uppercase letter');
+    if (policy.passwordRequireLower && !/[a-z]/.test(password)) problems.push('At least one lowercase letter');
+    if (policy.passwordRequireDigit && !/\d/.test(password)) problems.push('At least one digit');
+    if (policy.passwordRequireSpecial && !/[^A-Za-z0-9]/.test(password)) problems.push('At least one special character');
+    return { ok: problems.length === 0, problems };
+  }
+
   async updateTenantInfo(tenantId: string, dto: UpdateTenantInfoDto) {
     const featureFlagsUpdate = dto.industry
       ? `feature_flags = jsonb_set(COALESCE(feature_flags, '{}'), '{industry}', to_jsonb($8::text)),`
@@ -210,4 +281,36 @@ export class SettingsService {
       [tenantId],
     );
   }
+}
+
+function mapPolicy(row: any) {
+  if (!row) {
+    return {
+      passwordMinLength: 8,
+      passwordRequireUpper: true,
+      passwordRequireLower: true,
+      passwordRequireDigit: true,
+      passwordRequireSpecial: true,
+      passwordExpiryDays: 0,
+      sessionTimeoutMinutes: 30,
+      failedLoginLockoutCount: 5,
+      failedLoginLockoutMinutes: 30,
+      require2faForAdmins: false,
+      require2faForAll: false,
+    };
+  }
+  return {
+    passwordMinLength: row.password_min_length,
+    passwordRequireUpper: row.password_require_upper,
+    passwordRequireLower: row.password_require_lower,
+    passwordRequireDigit: row.password_require_digit,
+    passwordRequireSpecial: row.password_require_special,
+    passwordExpiryDays: row.password_expiry_days,
+    sessionTimeoutMinutes: row.session_timeout_minutes,
+    failedLoginLockoutCount: row.failed_login_lockout_count,
+    failedLoginLockoutMinutes: row.failed_login_lockout_minutes,
+    require2faForAdmins: row.require_2fa_for_admins,
+    require2faForAll: row.require_2fa_for_all,
+    updatedAt: row.updated_at,
+  };
 }
