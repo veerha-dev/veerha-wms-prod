@@ -63,8 +63,8 @@ export class UsersRepository {
 
   async create(tenantId: string, data: any) {
     const result = await this.db.query(
-      `INSERT INTO users (tenant_id, email, full_name, password_hash, role, is_active, warehouse_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO users (tenant_id, email, full_name, password_hash, role, is_active, warehouse_id, phone, must_change_password)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         tenantId,
@@ -74,6 +74,8 @@ export class UsersRepository {
         data.role || 'worker',
         data.isActive !== undefined ? data.isActive : true,
         data.warehouseId || null,
+        data.phone || null,
+        data.mustChangePassword === true,
       ],
     );
     return this.mapRow(result.rows[0]);
@@ -155,6 +157,7 @@ export class UsersRepository {
       warehouse_id: row.warehouse_id || null,
       isActive: row.is_active,
       is_active: row.is_active,
+      mustChangePassword: row.must_change_password ?? false,
       lastLogin: row.last_login,
       last_login: row.last_login,
       createdAt: row.created_at,

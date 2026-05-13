@@ -1,19 +1,21 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PickListsRepository } from './pick-lists.repository';
 import { GeneratePickListDto } from './dto';
 import { getCurrentTenantId } from '../common/tenant.context';
 
-
-
+interface AuthUser { id: string; role: string; warehouseId?: string | null }
 
 @Injectable()
 export class PickListsService {
   constructor(private repository: PickListsRepository) {}
 
 
-  async findAll(query: any) {
+  async findAll(query: any, user?: AuthUser) {
     const { page = 1, limit = 50 } = query;
-    const { data, total } = await this.repository.findAll(getCurrentTenantId(), query);
+    const scopedQuery = user?.role === 'manager' && user.warehouseId
+      ? { ...query, warehouseId: user.warehouseId }
+      : query;
+    const { data, total } = await this.repository.findAll(getCurrentTenantId(), scopedQuery);
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
@@ -28,7 +30,13 @@ export class PickListsService {
     return this.repository.create(getCurrentTenantId(), { ...dto, pickListNumber });
   }
 
-  async generate(dto: GeneratePickListDto) {
+  async generate(dto: GeneratePickListDto, user?: AuthUser) {
+    if (user?.role === 'manager' && user.warehouseId) {
+      if (dto.warehouseId && dto.warehouseId !== user.warehouseId) {
+        throw new ForbiddenException('Manager can only generate pick lists for their assigned warehouse');
+      }
+      dto = { ...dto, warehouseId: user.warehouseId };
+    }
     const { strategy, orderIds, warehouseId, assignedTo, priority, batchSize, notes } = dto;
 
     if (!orderIds || orderIds.length === 0) {

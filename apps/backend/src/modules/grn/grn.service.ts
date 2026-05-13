@@ -2,17 +2,19 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { GrnRepository } from './grn.repository';
 import { getCurrentTenantId } from '../common/tenant.context';
 
-
-
+interface AuthUser { id: string; role: string; warehouseId?: string | null }
 
 @Injectable()
 export class GrnService {
   constructor(private repository: GrnRepository) {}
 
 
-  async findAll(query: any) {
+  async findAll(query: any, user?: AuthUser) {
     const { page = 1, limit = 50 } = query;
-    const { data, total } = await this.repository.findAll(getCurrentTenantId(), query);
+    const scopedQuery = user?.role === 'manager' && user.warehouseId
+      ? { ...query, warehouseId: user.warehouseId }
+      : query;
+    const { data, total } = await this.repository.findAll(getCurrentTenantId(), scopedQuery);
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 

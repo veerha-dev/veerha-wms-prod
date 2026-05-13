@@ -9,12 +9,16 @@ function useRefetchInterval(fallback = 60000): number | false {
   return (prefs?.refreshIntervalSeconds ?? fallback / 1000) * 1000;
 }
 
-export function useDashboardStats() {
+export function useDashboardStats(warehouseId?: string | null) {
   const { isAuthenticated } = useAuth();
   const interval = useRefetchInterval(60000);
   return useQuery({
-    queryKey: ['dashboard-stats'],
-    queryFn: async () => { const { data } = await api.get('/api/v1/dashboard/stats'); return data.data; },
+    queryKey: ['dashboard-stats', warehouseId],
+    queryFn: async () => {
+      const params = warehouseId ? { warehouseId } : {};
+      const { data } = await api.get('/api/v1/dashboard/stats', { params });
+      return data.data;
+    },
     enabled: isAuthenticated,
     refetchInterval: interval,
   });
@@ -42,8 +46,8 @@ export function useDashboardOrdersSummary() {
   });
 }
 
-export function useDashboardMetrics() {
-  const stats = useDashboardStats();
+export function useDashboardMetrics(warehouseId?: string | null) {
+  const stats = useDashboardStats(warehouseId);
   const inventory = useDashboardInventoryOverview();
   const orders = useDashboardOrdersSummary();
   return {

@@ -15,6 +15,7 @@ import { ErrorBoundary } from "@/shared/components/common/ErrorBoundary";
 // Auth
 import LoginPage from "@/features/auth/pages/LoginPage";
 import SignupPage from "@/features/auth/pages/SignupPage";
+import ForcePasswordChangePage from "@/features/auth/pages/ForcePasswordChangePage";
 // Dashboard
 import Index from "./Index";
 // Warehouse
@@ -101,6 +102,7 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
+            <Route path="/force-password-change" element={<ForcePasswordChangePage />} />
             <Route path="/auth" element={<Navigate to="/login" replace />} />
             
             <Route path="/" element={<ProtectedLayout><Index /></ProtectedLayout>} />

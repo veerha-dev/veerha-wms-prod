@@ -1,18 +1,21 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { TasksRepository } from './tasks.repository';
 import { getCurrentTenantId } from '../common/tenant.context';
 
-
-
+interface AuthUser { id: string; role: string; warehouseId?: string | null }
 
 @Injectable()
 export class TasksService {
   constructor(private repository: TasksRepository) {}
 
 
-  async findAll(query: any) {
+  async findAll(query: any, user?: AuthUser) {
     const { page = 1, limit = 50 } = query;
-    const { data, total } = await this.repository.findAll(getCurrentTenantId(), query);
+    // Manager: force warehouse filter to their warehouse
+    const scopedQuery = user?.role === 'manager' && user.warehouseId
+      ? { ...query, warehouseId: user.warehouseId }
+      : query;
+    const { data, total } = await this.repository.findAll(getCurrentTenantId(), scopedQuery);
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
@@ -22,7 +25,14 @@ export class TasksService {
     return item;
   }
 
-  async create(dto: any) {
+  async create(dto: any, user?: AuthUser) {
+    // Manager: enforce warehouse to their own
+    if (user?.role === 'manager' && user.warehouseId) {
+      if (dto.warehouseId && dto.warehouseId !== user.warehouseId) {
+        throw new ForbiddenException('Manager can only create tasks for their assigned warehouse');
+      }
+      dto.warehouseId = user.warehouseId;
+    }
     const taskNumber = dto.taskNumber || await this.generateCode();
     const { code, ...rest } = dto; return this.repository.create(getCurrentTenantId(), { ...rest, taskNumber });
   }

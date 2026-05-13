@@ -36,6 +36,7 @@ export class AuthService {
       email: user.email,
       role: user.role,
       tenantId: user.tenant_id,
+      warehouseId: user.warehouse_id ?? null,
     });
 
     return {
@@ -46,7 +47,10 @@ export class AuthService {
         fullName: user.full_name,
         role: user.role,
         tenantId: user.tenant_id,
+        warehouseId: user.warehouse_id ?? null,
+        phone: user.phone ?? null,
         isActive: true,
+        mustChangePassword: user.must_change_password ?? false,
       },
     };
   }
@@ -77,6 +81,7 @@ export class AuthService {
       email: user.email,
       role: user.role,
       tenantId: user.tenant_id,
+      warehouseId: user.warehouse_id ?? null,
     });
 
     return {
@@ -87,7 +92,10 @@ export class AuthService {
         fullName: user.full_name,
         role: user.role,
         tenantId: user.tenant_id,
+        warehouseId: user.warehouse_id ?? null,
+        phone: user.phone ?? null,
         isActive: user.is_active,
+        mustChangePassword: user.must_change_password ?? false,
       },
     };
   }
@@ -104,7 +112,10 @@ export class AuthService {
       fullName: user.full_name,
       role: user.role,
       tenantId: user.tenant_id,
+      warehouseId: user.warehouse_id ?? null,
+      phone: user.phone ?? null,
       isActive: user.is_active,
+      mustChangePassword: user.must_change_password ?? false,
       lastLogin: user.last_login,
       createdAt: user.created_at,
     };
@@ -148,7 +159,7 @@ export class AuthService {
     return { message: 'Password updated successfully' };
   }
 
-  private async generateTokens(payload: { sub: string; email: string; role: string; tenantId: string }) {
+  private async generateTokens(payload: { sub: string; email: string; role: string; tenantId: string; warehouseId?: string | null }) {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.getOrThrow<string>('JWT_SECRET'),

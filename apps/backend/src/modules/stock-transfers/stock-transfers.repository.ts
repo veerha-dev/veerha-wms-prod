@@ -97,7 +97,7 @@ export class StockTransfersRepository {
         data.sourceWarehouseId || null, data.sourceZoneId || null, data.sourceRackId || null, data.sourceBinId || null,
         data.destWarehouseId || null, data.destZoneId || null, data.destRackId || null, data.destBinId || null,
         data.skuId || null, data.quantity, data.reason || null, data.priority || 'medium',
-        'requested', data.requestedBy || null, data.assignedTo || null, data.notes || null,
+        data.status || 'requested', data.requestedBy || null, data.assignedTo || null, data.notes || null,
       ],
     );
     return this.mapRow(result.rows[0]);

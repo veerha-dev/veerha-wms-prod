@@ -60,6 +60,12 @@ export class UsersController {
     return { success: true, data };
   }
 
+  @Post(':id/reset-password')
+  async resetPassword(@Param('id') id: string) {
+    const data = await this.service.resetPassword(id);
+    return { success: true, data };
+  }
+
   @Put(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     const data = await this.service.update(id, dto);

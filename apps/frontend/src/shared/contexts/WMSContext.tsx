@@ -152,10 +152,11 @@ export function WMSProvider({ children }: { children: ReactNode }) {
   );
   const { data: skus = [] } = useSKUs();
   const { data: tasks = [] } = useTasks();
-  const { stats: dbStats, inventory: dbInventory, orders: dbOrders } = useDashboardMetrics();
-  useDashboardRealtime();
 
   const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
+
+  const { stats: dbStats, inventory: dbInventory, orders: dbOrders } = useDashboardMetrics(selectedWarehouse?.id);
+  useDashboardRealtime();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Convert tenant to legacy format
@@ -212,12 +213,12 @@ export function WMSProvider({ children }: { children: ReactNode }) {
     utilizationRate: activeWarehouses.length > 0 ?
       Math.round((activeWarehouses.reduce((acc: number, w: any) => acc + (w.currentOccupancy || 0), 0) /
         Math.max(1, activeWarehouses.reduce((acc: number, w: any) => acc + (w.totalCapacity || 1), 0))) * 100) : 0,
-    dailyMovements: dbStats.dailyMovements || dbStats.recentMovements?.length || 0,
+    dailyMovements: dbStats.dailyMovements || 0,
     returnsToday: dbStats.returnsToday || 0,
     totalStockAvailable: dbStats.totalStockUnits || 0,
     totalStockReserved: 0,
-    lowStockSkus: dbInventory?.lowStockSkus || 0,
-    expiringBatches30d: dbInventory?.expiringBatches || 0,
+    lowStockSkus: dbStats.lowStockItems || 0,
+    expiringBatches30d: dbStats.expiringItems || 0,
     activeAlerts: dbStats.unacknowledgedAlerts || 0,
     todayInwardQty: dbStats.todayInwardQty || 0,
     todayOutwardQty: dbStats.todayOutwardQty || 0,
@@ -227,11 +228,11 @@ export function WMSProvider({ children }: { children: ReactNode }) {
     grnPending: dbStats.grnPending || 0,
     qcPending: dbStats.qcPending || 0,
     soConfirmed: soStatusCounts['confirmed'] || 0,
-    soInProgress: (soStatusCounts['picking'] || 0) + (soStatusCounts['packing'] || 0),
+    soInProgress: soStatusCounts['packing'] || 0,
     soShipped: soStatusCounts['shipped'] || 0,
     soDelivered: soStatusCounts['delivered'] || 0,
-    picksPending: 0,
-    shipmentsPending: 0,
+    picksPending: soStatusCounts['picking'] || 0,
+    shipmentsPending: dbStats.shipmentsPending || 0,
     tasksInProgress: pendingTasks,
     tasksCompletedToday: 0,
   } : {

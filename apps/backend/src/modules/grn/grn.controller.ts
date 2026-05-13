@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, HttpCode, HttpStatus, Req, UseGuards } from '@nestjs/common';
 import { GrnService } from './grn.service';
 import { CreateGrnDto, UpdateGrnDto, QueryGrnDto } from './dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('api/v1/grn')
 export class GrnController {
@@ -10,8 +11,9 @@ export class GrnController {
   async getStats() { return { success: true, data: await this.service.getStats() }; }
 
   @Get()
-  async findAll(@Query() query: QueryGrnDto) {
-    const result = await this.service.findAll(query);
+  @UseGuards(JwtAuthGuard)
+  async findAll(@Query() query: QueryGrnDto, @Req() req: any) {
+    const result = await this.service.findAll(query, req.user);
     return { success: true, data: result.data, meta: result.meta };
   }
 

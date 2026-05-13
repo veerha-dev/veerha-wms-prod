@@ -1,23 +1,30 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { StockTransfersRepository } from './stock-transfers.repository';
 import { DatabaseService } from '../../database/database.service';
 import { CreateStockTransferDto, UpdateStockTransferDto, QueryStockTransferDto } from './dto';
 import { getCurrentTenantId } from '../common/tenant.context';
 
-
-
+interface AuthUser {
+  id: string;
+  role: string;
+  warehouseId?: string | null;
+}
 
 @Injectable()
 export class StockTransfersService {
   constructor(
-
     private repository: StockTransfersRepository,
     private db: DatabaseService,
   ) {}
 
-  async findAll(query: QueryStockTransferDto) {
+  async findAll(query: QueryStockTransferDto, user?: AuthUser) {
     const { page = 1, limit = 50 } = query;
-    const { data, total } = await this.repository.findAll(getCurrentTenantId(), query);
+    const scopedQuery: any = { ...query };
+    // Manager: scope to their warehouse as source
+    if (user?.role === 'manager' && user.warehouseId) {
+      scopedQuery.sourceWarehouseId = user.warehouseId;
+    }
+    const { data, total } = await this.repository.findAll(getCurrentTenantId(), scopedQuery);
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
@@ -27,9 +34,39 @@ export class StockTransfersService {
     return t;
   }
 
-  async create(dto: CreateStockTransferDto) {
+  async create(dto: CreateStockTransferDto, user?: AuthUser) {
     const transferNumber = await this.repository.getNextCode(getCurrentTenantId());
-    return this.repository.create(getCurrentTenantId(), { ...dto, transferNumber });
+
+    const isInterWarehouse = !!(
+      dto.sourceWarehouseId &&
+      dto.destWarehouseId &&
+      dto.sourceWarehouseId !== dto.destWarehouseId
+    );
+
+    // Manager scoping: enforce source warehouse must be their own
+    if (user?.role === 'manager' && user.warehouseId) {
+      if (dto.sourceWarehouseId && dto.sourceWarehouseId !== user.warehouseId) {
+        throw new ForbiddenException(
+          'Manager can only initiate transfers from their assigned warehouse',
+        );
+      }
+    }
+
+    // Per workflow doc:
+    // - Manager intra-warehouse → auto-approved (executes directly)
+    // - Manager inter-warehouse → 'requested' status awaiting admin approval
+    // - Admin: defaults to 'requested' for inter-warehouse but can be approved later
+    let initialStatus: string = 'requested';
+    if (!isInterWarehouse) {
+      initialStatus = 'approved';
+    }
+
+    return this.repository.create(getCurrentTenantId(), {
+      ...dto,
+      transferNumber,
+      status: initialStatus,
+      requestedBy: user?.id || (dto as any).requestedBy || null,
+    });
   }
 
   async update(id: string, dto: UpdateStockTransferDto) {
@@ -37,10 +74,27 @@ export class StockTransfersService {
     return this.repository.update(getCurrentTenantId(), id, dto);
   }
 
-  async approve(id: string) {
+  async approve(id: string, user?: AuthUser) {
     const t = await this.findById(id);
     if (t.status !== 'requested') throw new BadRequestException(`Cannot approve in ${t.status} status`);
-    return this.repository.update(getCurrentTenantId(), id, { status: 'approved', approvedAt: new Date() });
+
+    const isInterWarehouse =
+      t.sourceWarehouseId &&
+      t.destWarehouseId &&
+      t.sourceWarehouseId !== t.destWarehouseId;
+
+    // Per workflow doc: only Admin can approve inter-warehouse transfers
+    if (isInterWarehouse && user?.role === 'manager') {
+      throw new ForbiddenException(
+        'Inter-warehouse transfers require Admin approval',
+      );
+    }
+
+    return this.repository.update(getCurrentTenantId(), id, {
+      status: 'approved',
+      approvedAt: new Date(),
+      approvedBy: user?.id,
+    });
   }
 
   async startTransit(id: string) {
@@ -114,7 +168,8 @@ export class StockTransfersService {
     return this.repository.delete(getCurrentTenantId(), id);
   }
 
-  async getStats(warehouseId?: string) {
-    return this.repository.getStats(getCurrentTenantId(), warehouseId);
+  async getStats(warehouseId?: string, user?: AuthUser) {
+    const wh = user?.role === 'manager' && user.warehouseId ? user.warehouseId : warehouseId;
+    return this.repository.getStats(getCurrentTenantId(), wh);
   }
 }

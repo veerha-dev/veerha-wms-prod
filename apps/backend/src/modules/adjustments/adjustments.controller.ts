@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { AdjustmentsService } from './adjustments.service';
 import { CreateAdjustmentDto, UpdateAdjustmentDto, QueryAdjustmentDto } from './dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('api/v1/adjustments')
 export class AdjustmentsController {
@@ -19,20 +20,23 @@ export class AdjustmentsController {
   }
 
   @Post()
-  async create(@Body() dto: CreateAdjustmentDto) {
-    const data = await this.service.create(dto);
+  @UseGuards(JwtAuthGuard)
+  async create(@Body() dto: CreateAdjustmentDto, @Req() req: any) {
+    const data = await this.service.create(dto, req.user);
     return { success: true, data };
   }
 
   @Post(':id/approve')
-  async approve(@Param('id') id: string, @Body() body: { approvedBy?: string }) {
-    const data = await this.service.approve(id, body.approvedBy);
+  @UseGuards(JwtAuthGuard)
+  async approve(@Param('id') id: string, @Req() req: any) {
+    const data = await this.service.approve(id, req.user);
     return { success: true, data };
   }
 
   @Post(':id/reject')
-  async reject(@Param('id') id: string, @Body() body: { approvedBy?: string }) {
-    const data = await this.service.reject(id, body.approvedBy);
+  @UseGuards(JwtAuthGuard)
+  async reject(@Param('id') id: string, @Req() req: any) {
+    const data = await this.service.reject(id, req.user);
     return { success: true, data };
   }
 

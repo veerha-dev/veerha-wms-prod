@@ -64,12 +64,48 @@ export class UsersService {
     const existing = await this.repository.findByEmail(getCurrentTenantId(), dto.email);
     if (existing) throw new ConflictException(`User with email ${dto.email} already exists`);
 
-    let passwordHash = null;
-    if (dto.password) {
-      passwordHash = await bcrypt.hash(dto.password, 12);
-    }
+    // Auto-generate temporary password if not provided
+    const tempPassword = dto.password || this.generateTempPassword();
+    const passwordHash = await bcrypt.hash(tempPassword, 12);
 
-    return this.repository.create(getCurrentTenantId(), { ...dto, passwordHash, isActive: true });
+    const user = await this.repository.create(getCurrentTenantId(), {
+      ...dto,
+      passwordHash,
+      isActive: true,
+      mustChangePassword: true,
+    });
+
+    // Return the temp password so caller can email it / display once
+    return { ...user, temporaryPassword: tempPassword };
+  }
+
+  async resetPassword(id: string) {
+    await this.findById(id);
+    const tempPassword = this.generateTempPassword();
+    const passwordHash = await bcrypt.hash(tempPassword, 12);
+    await this.db.query(
+      `UPDATE users SET password_hash = $1, must_change_password = true, updated_at = NOW()
+       WHERE id = $2 AND tenant_id = $3`,
+      [passwordHash, id, getCurrentTenantId()],
+    );
+    return { id, temporaryPassword: tempPassword };
+  }
+
+  private generateTempPassword(): string {
+    // 12 chars: 3 letters + 1 special + 3 letters + 1 special + 4 digits → meets complexity rules
+    const upper = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+    const lower = 'abcdefghjkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const specials = '!@#$%^&*';
+    const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
+    const segs = [
+      pick(upper), pick(lower), pick(lower),
+      pick(specials),
+      pick(upper), pick(lower), pick(lower),
+      pick(specials),
+      pick(digits), pick(digits), pick(digits), pick(digits),
+    ];
+    return segs.join('');
   }
 
   async deactivate(id: string) {

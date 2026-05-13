@@ -8,6 +8,7 @@ import { OutboundPipeline } from '@/features/dashboard/components/OutboundPipeli
 import { AlertsSummary } from '@/features/dashboard/components/AlertsSummary';
 import { TasksActivityPanel } from '@/features/dashboard/components/TasksActivityPanel';
 import { useWMS } from '@/shared/contexts/WMSContext';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import {
   Building2,
   Package,
@@ -20,7 +21,7 @@ import {
 } from 'lucide-react';
 
 export default function Dashboard() {
-  const { metrics, selectedWarehouse } = useWMS();
+  const { metrics, selectedWarehouse, warehouses, selectWarehouse } = useWMS();
 
   const totalAlerts = metrics.activeAlerts + metrics.lowStockSkus;
 
@@ -32,6 +33,32 @@ export default function Dashboard() {
         { label: selectedWarehouse?.name || 'All Warehouses' },
       ]}
     >
+
+      {/* ── Warehouse Filter ─────────────────────────────────────── */}
+      {warehouses.length > 1 && (
+        <div className="flex items-center gap-3 mb-5">
+          <span className="text-sm text-muted-foreground">Filter by warehouse:</span>
+          <Select
+            value={selectedWarehouse?.id || 'all'}
+            onValueChange={(id) => {
+              if (id === 'all') selectWarehouse(warehouses[0]);
+              else {
+                const wh = warehouses.find((w: any) => w.id === id);
+                if (wh) selectWarehouse(wh);
+              }
+            }}
+          >
+            <SelectTrigger className="w-52 h-8 text-sm">
+              <SelectValue placeholder="All Warehouses" />
+            </SelectTrigger>
+            <SelectContent>
+              {warehouses.map((w: any) => (
+                <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* ── Section 1: KPI Strip ─────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">

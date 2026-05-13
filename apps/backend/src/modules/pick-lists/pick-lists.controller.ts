@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, HttpCode, HttpStatus, Req, UseGuards } from '@nestjs/common';
 import { PickListsService } from './pick-lists.service';
 import { CreatePickListDto, GeneratePickListDto, UpdatePickListDto, QueryPickListDto } from './dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('api/v1/pick-lists')
 export class PickListsController {
@@ -10,8 +11,9 @@ export class PickListsController {
   async getStats() { return { success: true, data: await this.service.getStats() }; }
 
   @Get()
-  async findAll(@Query() query: QueryPickListDto) {
-    const result = await this.service.findAll(query);
+  @UseGuards(JwtAuthGuard)
+  async findAll(@Query() query: QueryPickListDto, @Req() req: any) {
+    const result = await this.service.findAll(query, req.user);
     return { success: true, data: result.data, meta: result.meta };
   }
 
@@ -29,8 +31,9 @@ export class PickListsController {
   async remove(@Param('id') id: string) { await this.service.remove(id); return { success: true, data: { id } }; }
 
   @Post('generate')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
-  async generate(@Body() dto: GeneratePickListDto) { return { success: true, data: await this.service.generate(dto) }; }
+  async generate(@Body() dto: GeneratePickListDto, @Req() req: any) { return { success: true, data: await this.service.generate(dto, req.user) }; }
 
   @Post(':id/assign')
   @HttpCode(HttpStatus.OK)

@@ -13,8 +13,8 @@ export class DashboardController {
   }
 
   @Get('stats')
-  async getStats() {
-    const data = await this.service.getStats();
+  async getStats(@Query('warehouseId') warehouseId?: string) {
+    const data = await this.service.getStats(warehouseId);
     return { success: true, data };
   }
 

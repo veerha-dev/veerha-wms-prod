@@ -29,7 +29,7 @@ export default function ManagerDashboard() {
     );
   }
 
-  const { warehouse, shift, kpis, workers, inbound, outbound, tasks, zones, shipments, recentActivity } = data;
+  const { warehouse, shift, kpis, workers, inbound, outbound, tasks, zones, shipments, recentActivity, dueToday } = data;
   const formatDate = (d: string) => d ? new Date(d).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
   const formatTime = (d: string) => d ? new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
   const timeAgo = (d: string) => {
@@ -65,6 +65,7 @@ export default function ManagerDashboard() {
                 <Button size="sm" variant="outline" asChild><Link to="/operations"><Plus className="h-3.5 w-3.5 mr-1" />Create Task</Link></Button>
                 <Button size="sm" variant="outline" asChild><Link to="/inbound/grn"><ClipboardCheck className="h-3.5 w-3.5 mr-1" />Create GRN</Link></Button>
                 <Button size="sm" variant="outline" asChild><Link to="/outbound/picking"><ClipboardList className="h-3.5 w-3.5 mr-1" />Pick List</Link></Button>
+                <Button size="sm" variant="outline" asChild><Link to="/users"><Users className="h-3.5 w-3.5 mr-1" />My Workers</Link></Button>
               </div>
             </div>
           </CardContent>
@@ -167,19 +168,33 @@ export default function ManagerDashboard() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Outbound Pipeline</CardTitle></CardHeader>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm">Outbound Pipeline</CardTitle>
+                {dueToday?.total > 0 && (
+                  <Badge className="bg-red-100 text-red-700 text-[10px]">
+                    {dueToday.total} due today
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
                 {[
-                  { label: 'Confirmed', value: outbound.ordersConfirmed, color: 'bg-blue-100 text-blue-700' },
-                  { label: 'Picking', value: outbound.picking, color: 'bg-purple-100 text-purple-700' },
-                  { label: 'Packing', value: outbound.packing, color: 'bg-orange-100 text-orange-700' },
-                  { label: 'Shipped', value: outbound.shipped, color: 'bg-green-100 text-green-700' },
+                  { label: 'Confirmed', value: outbound.ordersConfirmed, due: dueToday?.confirmed || 0, color: 'bg-blue-100 text-blue-700' },
+                  { label: 'Picking', value: outbound.picking, due: dueToday?.picking || 0, color: 'bg-purple-100 text-purple-700' },
+                  { label: 'Packing', value: outbound.packing, due: dueToday?.packing || 0, color: 'bg-orange-100 text-orange-700' },
+                  { label: 'Shipped', value: outbound.shipped, due: dueToday?.readyToShip || 0, color: 'bg-green-100 text-green-700' },
                 ].map((stage, i) => (
                   <div key={stage.label} className="flex items-center gap-2 flex-1">
-                    <div className={`rounded-lg p-3 text-center flex-1 ${stage.color}`}>
+                    <div className={`rounded-lg p-3 text-center flex-1 ${stage.color} relative`}>
                       <div className="text-xl font-bold">{stage.value}</div>
                       <div className="text-[10px]">{stage.label}</div>
+                      {stage.due > 0 && (
+                        <div className="text-[9px] mt-0.5 font-semibold text-red-700">
+                          {stage.due} due today
+                        </div>
+                      )}
                     </div>
                     {i < 3 && <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
                   </div>

@@ -7,7 +7,8 @@ export class AuthRepository {
 
   async findUserByEmail(email: string) {
     const result = await this.db.query(
-      `SELECT id, email, full_name, role, tenant_id, is_active, password_hash
+      `SELECT id, email, full_name, role, tenant_id, is_active, password_hash,
+              must_change_password, warehouse_id, phone
        FROM users
        WHERE email = $1`,
       [email]
@@ -27,7 +28,8 @@ export class AuthRepository {
 
   async findUserById(id: string) {
     const result = await this.db.query(
-      `SELECT id, email, full_name, role, tenant_id, is_active, last_login, created_at, updated_at
+      `SELECT id, email, full_name, role, tenant_id, is_active, last_login,
+              must_change_password, warehouse_id, phone, created_at, updated_at
        FROM users
        WHERE id = $1`,
       [id]
@@ -53,7 +55,7 @@ export class AuthRepository {
 
   async updatePasswordHash(userId: string, hash: string) {
     await this.db.query(
-      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+      `UPDATE users SET password_hash = $1, must_change_password = false, updated_at = NOW() WHERE id = $2`,
       [hash, userId]
     );
   }

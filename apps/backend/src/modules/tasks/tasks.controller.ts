@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, HttpCode, HttpStatus, Req, UseGuards } from '@nestjs/common';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto, UpdateTaskDto, QueryTaskDto } from './dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('api/v1/tasks')
 export class TasksController {
@@ -10,8 +11,9 @@ export class TasksController {
   async getStats() { return { success: true, data: await this.service.getStats() }; }
 
   @Get()
-  async findAll(@Query() query: QueryTaskDto) {
-    const result = await this.service.findAll(query);
+  @UseGuards(JwtAuthGuard)
+  async findAll(@Query() query: QueryTaskDto, @Req() req: any) {
+    const result = await this.service.findAll(query, req.user);
     return { success: true, data: result.data, meta: result.meta };
   }
 
@@ -19,8 +21,9 @@ export class TasksController {
   async findOne(@Param('id') id: string) { return { success: true, data: await this.service.findOne(id) }; }
 
   @Post()
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() dto: CreateTaskDto) { return { success: true, data: await this.service.create(dto) }; }
+  async create(@Body() dto: CreateTaskDto, @Req() req: any) { return { success: true, data: await this.service.create(dto, req.user) }; }
 
   @Put(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateTaskDto) { return { success: true, data: await this.service.update(id, dto) }; }

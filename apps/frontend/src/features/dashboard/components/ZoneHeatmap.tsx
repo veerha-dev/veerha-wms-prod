@@ -32,8 +32,8 @@ export function ZoneHeatmap() {
     name: zone.name,
     type: zone.type,
     utilization: zone.utilization,
-    bins: 0, // Will be calculated when bins are integrated
-    isActive: zone.is_active,
+    bins: zone.binCount ?? zone.bin_count ?? 0,
+    isActive: zone.isActive ?? zone.is_active,
     status: zone.status,
   }));
 

@@ -18,6 +18,7 @@ interface AuthUser {
   tenantId: string;
   warehouseId: string | null;
   isActive: boolean;
+  mustChangePassword?: boolean;
   lastLogin?: string | null;
 }
 
@@ -73,6 +74,7 @@ function mapBackendUser(backendUser: any): AuthUser {
     tenantId: backendUser.tenantId,
     warehouseId: backendUser.warehouseId || null,
     isActive: backendUser.isActive ?? true,
+    mustChangePassword: backendUser.mustChangePassword ?? false,
     lastLogin: backendUser.lastLogin || null,
   };
 }

@@ -37,11 +37,16 @@ export function ZoneProvider({ children }: { children: ReactNode }) {
 
   // Calculate utilization and status for each zone
   const calculateZoneUtilization = (zone: Zone): ZoneWithUtilization => {
-    const cap = zone.capacity ?? 0;
-    const used = zone.currentOccupancy ?? 0;
-    const utilization = cap > 0 
-      ? Math.round((used / cap) * 100) 
-      : 0;
+    // Prefer pre-calculated utilization from DB (capacityWeight/Volume based)
+    // Fall back to capacity/currentOccupancy for legacy data
+    let utilization: number;
+    if (typeof zone.utilization === 'number' && zone.utilization >= 0) {
+      utilization = Math.round(zone.utilization);
+    } else {
+      const cap = zone.capacityWeight ?? zone.capacity ?? 0;
+      const used = zone.currentWeight ?? zone.currentOccupancy ?? 0;
+      utilization = cap > 0 ? Math.round((used / cap) * 100) : 0;
+    }
 
     let status: 'optimal' | 'warning' | 'critical' | 'empty';
     if (utilization === 0) {

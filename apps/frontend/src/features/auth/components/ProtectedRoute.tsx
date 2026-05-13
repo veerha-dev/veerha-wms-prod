@@ -17,7 +17,7 @@ export function ProtectedRoute({
   requireManager = false,
   requiredModule,
 }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, isAdmin, isManager } = useAuth();
+  const { isAuthenticated, isLoading, isAdmin, isManager, user } = useAuth();
   const { canAccess, canAccessRoute } = usePermissions();
   const location = useLocation();
 
@@ -34,6 +34,11 @@ export function ProtectedRoute({
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // First-login forced password change — must complete before accessing anything else
+  if (user?.mustChangePassword && location.pathname !== '/force-password-change') {
+    return <Navigate to="/force-password-change" replace />;
   }
 
   if (requireAdmin && !isAdmin) {
