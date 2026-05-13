@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { AuthRepository } from './auth.repository';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
+import { EmailService } from '../email/email.service';
 
 const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -14,6 +15,7 @@ export class AuthService {
     private repository: AuthRepository,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private email: EmailService,
   ) {}
 
   async signup(dto: SignupDto) {
@@ -38,6 +40,14 @@ export class AuthService {
       tenantId: user.tenant_id,
       warehouseId: user.warehouse_id ?? null,
     });
+
+    // Fire and forget welcome email — onboarding wizard takes over on first login
+    this.email
+      .sendWelcomeEmail({
+        to: user.email,
+        fullName: user.full_name,
+      })
+      .catch(() => undefined);
 
     return {
       ...tokens,

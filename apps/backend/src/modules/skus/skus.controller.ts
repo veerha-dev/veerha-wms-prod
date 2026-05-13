@@ -53,13 +53,23 @@ export class SkusController {
   }
 
   @Post('bulk')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Bulk create SKUs',
     description: 'Create multiple SKUs in a single operation. Useful for importing product catalogs.'
   })
   @ApiResponse({ status: 201, description: 'Bulk operation completed. Returns count of created/failed items.' })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   async bulkCreate(@Body() dto: BulkCreateSkuDto) {
+    const result = await this.service.bulkCreate(dto);
+    return { success: true, data: result };
+  }
+
+  @Post('import')
+  @ApiOperation({
+    summary: 'Import SKUs from parsed CSV/XLSX',
+    description: 'Onboarding endpoint — accepts a JSON array of SKU rows (parsed client-side from CSV/XLSX). Returns per-row error report.',
+  })
+  async importSkus(@Body() dto: BulkCreateSkuDto) {
     const result = await this.service.bulkCreate(dto);
     return { success: true, data: result };
   }

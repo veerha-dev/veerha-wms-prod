@@ -4,16 +4,21 @@ import { UsersRepository } from './users.repository';
 import { DatabaseService } from '../../database/database.service';
 import { CreateUserDto, UpdateUserDto, QueryUserDto } from './dto';
 import { getCurrentTenantId } from '../common/tenant.context';
+import { EmailService } from '../email/email.service';
 
-
-
+export interface BulkInviteResult {
+  invited: number;
+  failed: number;
+  errors: Array<{ row: number; email: string; message: string }>;
+  users: Array<{ id: string; email: string; fullName: string; role: string }>;
+}
 
 @Injectable()
 export class UsersService {
   constructor(
-
     private repository: UsersRepository,
     private db: DatabaseService,
+    private email: EmailService,
   ) {}
 
   async findAll(query: QueryUserDto) {
@@ -60,11 +65,10 @@ export class UsersService {
     return this.repository.delete(getCurrentTenantId(), id);
   }
 
-  async invite(dto: CreateUserDto & { password?: string }) {
+  async invite(dto: CreateUserDto & { password?: string; invitedByName?: string }) {
     const existing = await this.repository.findByEmail(getCurrentTenantId(), dto.email);
     if (existing) throw new ConflictException(`User with email ${dto.email} already exists`);
 
-    // Auto-generate temporary password if not provided
     const tempPassword = dto.password || this.generateTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 12);
 
@@ -75,12 +79,64 @@ export class UsersService {
       mustChangePassword: true,
     });
 
-    // Return the temp password so caller can email it / display once
-    return { ...user, temporaryPassword: tempPassword };
+    // Resolve warehouse name for the email (optional)
+    let warehouseName: string | undefined;
+    if ((dto as any).warehouseId) {
+      const wh = await this.db.query<{ name: string }>(
+        `SELECT name FROM warehouses WHERE id = $1 AND tenant_id = $2`,
+        [(dto as any).warehouseId, getCurrentTenantId()],
+      );
+      warehouseName = wh.rows[0]?.name;
+    }
+
+    // Fire and forget — failure to send email should not roll back user creation
+    this.email
+      .sendInviteEmail({
+        to: user.email,
+        fullName: user.fullName || user.full_name || dto.email,
+        tempPassword,
+        role: dto.role || 'worker',
+        warehouseName,
+        invitedByName: dto.invitedByName,
+      })
+      .catch(() => undefined);
+
+    // Do NOT return tempPassword to the client. It's been emailed.
+    return { ...user, emailed: true };
+  }
+
+  async inviteBulk(
+    invites: Array<CreateUserDto & { password?: string }>,
+    invitedByName?: string,
+  ): Promise<BulkInviteResult> {
+    const result: BulkInviteResult = { invited: 0, failed: 0, errors: [], users: [] };
+
+    for (let i = 0; i < invites.length; i++) {
+      const dto = invites[i];
+      try {
+        const user = await this.invite({ ...dto, invitedByName });
+        result.invited++;
+        result.users.push({
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName || user.full_name || dto.email,
+          role: dto.role || 'worker',
+        });
+      } catch (err) {
+        result.failed++;
+        result.errors.push({
+          row: i + 1,
+          email: dto.email,
+          message: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+
+    return result;
   }
 
   async resetPassword(id: string) {
-    await this.findById(id);
+    const user = await this.findById(id);
     const tempPassword = this.generateTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 12);
     await this.db.query(
@@ -88,7 +144,16 @@ export class UsersService {
        WHERE id = $2 AND tenant_id = $3`,
       [passwordHash, id, getCurrentTenantId()],
     );
-    return { id, temporaryPassword: tempPassword };
+
+    this.email
+      .sendPasswordResetEmail({
+        to: user.email,
+        fullName: user.fullName || user.full_name || user.email,
+        tempPassword,
+      })
+      .catch(() => undefined);
+
+    return { id, emailed: true };
   }
 
   private generateTempPassword(): string {

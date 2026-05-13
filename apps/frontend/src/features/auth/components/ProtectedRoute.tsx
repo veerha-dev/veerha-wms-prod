@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { usePermissions, ROUTE_PERMISSION_MAP } from '@/shared/hooks/usePermissions';
+import { useOnboardingStatus } from '@/features/onboarding/hooks/useOnboardingStatus';
 import { Loader2, ShieldX } from 'lucide-react';
 
 interface ProtectedRouteProps {
@@ -20,6 +21,7 @@ export function ProtectedRoute({
   const { isAuthenticated, isLoading, isAdmin, isManager, user } = useAuth();
   const { canAccess, canAccessRoute } = usePermissions();
   const location = useLocation();
+  const { data: onboarding, isLoading: onboardingLoading } = useOnboardingStatus();
 
   if (isLoading) {
     return (
@@ -39,6 +41,21 @@ export function ProtectedRoute({
   // First-login forced password change — must complete before accessing anything else
   if (user?.mustChangePassword && location.pathname !== '/force-password-change') {
     return <Navigate to="/force-password-change" replace />;
+  }
+
+  // Admin onboarding wizard — redirect admins on first login to the 5-step wizard
+  // until they finish or skip the whole thing. The wizard itself calls
+  // onboarding.complete to clear this flag.
+  const onOnboardingPage = location.pathname === '/onboarding';
+  if (
+    !onboardingLoading &&
+    onboarding &&
+    user?.role === 'admin' &&
+    !user?.mustChangePassword &&
+    onboarding.onboardingCompletedAt === null &&
+    !onOnboardingPage
+  ) {
+    return <Navigate to="/onboarding" replace />;
   }
 
   if (requireAdmin && !isAdmin) {

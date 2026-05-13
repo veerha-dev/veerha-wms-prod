@@ -11,11 +11,15 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { WarehousesService } from './warehouses.service';
-import { CreateWarehouseDto, UpdateWarehouseDto, QueryWarehouseDto } from './dto';
+import { WarehousesLayoutService } from './warehouses-layout.service';
+import { CreateWarehouseDto, UpdateWarehouseDto, QueryWarehouseDto, BulkLayoutDto } from './dto';
 
 @Controller('api/v1/warehouses')
 export class WarehousesController {
-  constructor(private readonly warehousesService: WarehousesService) {}
+  constructor(
+    private readonly warehousesService: WarehousesService,
+    private readonly layoutService: WarehousesLayoutService,
+  ) {}
 
   @Get()
   async findAll(@Query() query: QueryWarehouseDto) {
@@ -44,6 +48,13 @@ export class WarehousesController {
       success: true,
       data: warehouse,
     };
+  }
+
+  @Post(':id/layout/bulk')
+  @HttpCode(HttpStatus.CREATED)
+  async bulkLayout(@Param('id') id: string, @Body() dto: BulkLayoutDto) {
+    const data = await this.layoutService.createLayout(id, dto);
+    return { success: true, data };
   }
 
   @Put(':id')

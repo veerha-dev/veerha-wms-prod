@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, Request, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateUserDto, UpdateUserDto, QueryUserDto } from './dto';
 
 @Controller('api/v1/users')
@@ -43,8 +44,18 @@ export class UsersController {
   }
 
   @Post('invite')
-  async invite(@Body() dto: CreateUserDto) {
-    const data = await this.service.invite(dto);
+  @UseGuards(JwtAuthGuard)
+  async invite(@Body() dto: CreateUserDto, @Request() req: any) {
+    const invitedByName = req.user?.fullName || req.user?.email;
+    const data = await this.service.invite({ ...dto, invitedByName });
+    return { success: true, data };
+  }
+
+  @Post('invite/bulk')
+  @UseGuards(JwtAuthGuard)
+  async inviteBulk(@Body() body: { invites: CreateUserDto[] }, @Request() req: any) {
+    const invitedByName = req.user?.fullName || req.user?.email;
+    const data = await this.service.inviteBulk(body.invites || [], invitedByName);
     return { success: true, data };
   }
 

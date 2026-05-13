@@ -35,6 +35,8 @@ import { PutawayModule } from './modules/putaway/putaway.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { EmailModule } from './modules/email/email.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
 
 @Module({
   imports: [
@@ -43,6 +45,7 @@ import { SettingsModule } from './modules/settings/settings.module';
       envFilePath: '.env',
     }),
     DatabaseModule,
+    EmailModule,
     AuthModule,
     WarehousesModule,
     ZonesModule,
@@ -76,6 +79,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     SuperAdminModule,
     WebsocketModule,
     SettingsModule,
+    OnboardingModule,
   ],
 })
 export class AppModule implements NestModule {
