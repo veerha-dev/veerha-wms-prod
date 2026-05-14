@@ -127,6 +127,39 @@ export class PutawayService {
     return result;
   }
 
+  /**
+   * Mobile worker scans a bin barcode to confirm the destination. Validates the scanned bin
+   * matches the task's destination (or suggested) and advances status to 'in_progress' if not yet.
+   * Returns a friendly error if the wrong bin is scanned so the worker doesn't dump stock in the wrong place.
+   */
+  async scanBin(taskId: string, barcode: string) {
+    const task = await this.findOne(taskId);
+    if (!barcode) throw new BadRequestException('barcode is required');
+
+    const db = (this.repository as any).db;
+    const expectedBinId = task.destinationBinId || task.suggestedBinId;
+    if (!expectedBinId) {
+      throw new BadRequestException('Task has no destination bin assigned yet');
+    }
+    const expected = await db.query(`SELECT id, code FROM bins WHERE id = $1`, [expectedBinId]);
+    const expectedCode = expected.rows[0]?.code;
+    if (!expectedCode) throw new BadRequestException('Destination bin no longer exists');
+
+    const trimmed = barcode.trim().toUpperCase();
+    if (trimmed !== String(expectedCode).toUpperCase()) {
+      throw new BadRequestException(
+        `Wrong bin. You scanned "${barcode}". Expected "${expectedCode}". Walk to the correct location.`,
+      );
+    }
+
+    // Auto-advance status to in_progress if still pending/assigned
+    if (task.status === 'pending' || task.status === 'assigned') {
+      await this.repository.updateStatus(taskId, getCurrentTenantId(), 'in_progress', { startedAt: new Date() });
+    }
+
+    return { ok: true, taskId, binCode: expectedCode };
+  }
+
   async cancel(taskId: string) {
     await this.findOne(taskId);
     return this.repository.updateStatus(taskId, getCurrentTenantId(), 'cancelled');

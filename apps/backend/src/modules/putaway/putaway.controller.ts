@@ -65,6 +65,12 @@ export class PutawayController {
     return { success: true, data: await this.service.complete(id) };
   }
 
+  @Post(':id/scan-bin')
+  @HttpCode(HttpStatus.OK)
+  async scanBin(@Param('id') id: string, @Body() body: { barcode: string }) {
+    return { success: true, data: await this.service.scanBin(id, body.barcode) };
+  }
+
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
   async cancel(@Param('id') id: string) {

@@ -7,6 +7,7 @@ import { InboundPipeline } from '@/features/dashboard/components/InboundPipeline
 import { OutboundPipeline } from '@/features/dashboard/components/OutboundPipeline';
 import { AlertsSummary } from '@/features/dashboard/components/AlertsSummary';
 import { TasksActivityPanel } from '@/features/dashboard/components/TasksActivityPanel';
+import { ActivityFeed } from '@/features/audit/components/ActivityFeed';
 import { useWMS } from '@/shared/contexts/WMSContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import {
@@ -195,6 +196,9 @@ export default function Dashboard() {
           <WarehouseOverview />
           <TasksActivityPanel />
         </div>
+
+        {/* Phase 5 — Live tenant audit feed */}
+        <ActivityFeed limit={30} />
       </div>
 
     </AppLayout>

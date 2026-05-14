@@ -54,6 +54,9 @@ import LowStockReportPage from "@/features/reports/pages/reports/LowStockReportP
 import WarehouseUtilizationPage from "@/features/reports/pages/reports/WarehouseUtilizationPage";
 import AuditTrailPage from "@/features/reports/pages/reports/AuditTrailPage";
 import SystemAuditLogPage from "@/features/audit/pages/SystemAuditLogPage";
+import MobileHomePage from "@/features/mobile/pages/MobileHomePage";
+import MobilePutawayPage from "@/features/mobile/pages/MobilePutawayPage";
+import MobilePickPage from "@/features/mobile/pages/MobilePickPage";
 // Settings & Users
 import UsersPage from "@/features/users/pages/UsersPage";
 import SettingsPage from "@/features/settings/pages/SettingsPage";
@@ -146,6 +149,11 @@ const App = () => (
             <Route path="/reports/warehouse-utilization" element={<ProtectedLayout><WarehouseUtilizationPage /></ProtectedLayout>} />
             <Route path="/reports/audit-trail" element={<ProtectedLayout><AuditTrailPage /></ProtectedLayout>} />
             <Route path="/reports/system-audit" element={<ProtectedLayout><SystemAuditLogPage /></ProtectedLayout>} />
+
+            {/* Mobile worker routes — touch-optimised, no AppLayout chrome */}
+            <Route path="/m" element={<ProtectedRoute><MobileHomePage /></ProtectedRoute>} />
+            <Route path="/m/putaway" element={<ProtectedRoute><MobilePutawayPage /></ProtectedRoute>} />
+            <Route path="/m/pick" element={<ProtectedRoute><MobilePickPage /></ProtectedRoute>} />
             
             <Route path="/admin/modules" element={<ProtectedLayout><ModuleManagementPage /></ProtectedLayout>} />
             

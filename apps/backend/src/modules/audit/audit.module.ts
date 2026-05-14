@@ -3,9 +3,11 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuditController } from './audit.controller';
 import { AuditService } from './audit.service';
 import { AuditInterceptor } from './audit.interceptor';
+import { WebsocketModule } from '../../websocket/websocket.module';
 
 @Global()
 @Module({
+  imports: [WebsocketModule],
   controllers: [AuditController],
   providers: [
     AuditService,

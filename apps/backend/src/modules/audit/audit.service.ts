@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { getCurrentTenantId } from '../common/tenant.context';
+import { InventoryGateway } from '../../websocket/inventory.gateway';
 
 export interface AuditRecord {
   tenantId?: string;
@@ -41,7 +42,10 @@ export interface AuditQuery {
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    @Optional() private readonly gateway?: InventoryGateway,
+  ) {}
 
   async record(r: AuditRecord): Promise<void> {
     try {
@@ -83,6 +87,27 @@ export class AuditService {
           r.durationMs ?? null,
         ],
       );
+
+      // Push to the activity feed (best-effort; failure here must not propagate)
+      try {
+        this.gateway?.emitAudit(tid, {
+          tenantId: tid,
+          userId: r.userId,
+          userName: r.userName,
+          userEmail: r.userEmail,
+          userRole: r.userRole,
+          module: r.module,
+          action: r.action,
+          entityType: r.entityType,
+          entityId: r.entityId,
+          statusCode: r.statusCode,
+          httpMethod: r.httpMethod,
+          httpPath: r.httpPath,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (emitErr) {
+        this.logger.warn(`Failed to emit audit event: ${(emitErr as Error).message}`);
+      }
     } catch (err) {
       // Audit failures must never break user requests.
       this.logger.error('Audit insert failed', err as Error);

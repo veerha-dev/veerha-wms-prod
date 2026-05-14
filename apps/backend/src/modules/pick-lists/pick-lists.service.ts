@@ -151,6 +151,72 @@ export class PickListsService {
     return this.repository.updateStatus(id, getCurrentTenantId(), status, extraFields);
   }
 
+  /**
+   * Mobile pick: scan a SKU/bin barcode to mark a pick list item picked.
+   * Walks the pick list items and finds one matching the SKU code (and optionally bin code).
+   * Increments quantity_picked by qty. Returns the matched item or a friendly error.
+   */
+  async scanItem(pickListId: string, payload: { barcode: string; binBarcode?: string; quantity?: number }) {
+    if (!payload.barcode) throw new BadRequestException('barcode is required');
+    const tid = getCurrentTenantId();
+    const db = (this.repository as any).db;
+    const qty = payload.quantity ?? 1;
+
+    const candidates = await db.query(
+      `SELECT pli.id, pli.sku_id, pli.bin_id, pli.quantity_required, pli.quantity_picked, pli.status,
+              s.code AS sku_code, b.code AS bin_code
+         FROM pick_list_items pli
+         LEFT JOIN skus s ON pli.sku_id = s.id
+         LEFT JOIN bins b ON pli.bin_id = b.id
+        WHERE pli.pick_list_id = $1 AND pli.status != 'completed'
+        ORDER BY pli.id`,
+      [pickListId],
+    );
+
+    const upper = payload.barcode.trim().toUpperCase();
+    const upperBin = payload.binBarcode?.trim().toUpperCase();
+    const match = candidates.rows.find((r: any) => {
+      const skuMatch = String(r.sku_code || '').toUpperCase() === upper;
+      if (!skuMatch) return false;
+      if (upperBin && String(r.bin_code || '').toUpperCase() !== upperBin) return false;
+      return (r.quantity_picked ?? 0) < (r.quantity_required ?? 0);
+    });
+
+    if (!match) {
+      throw new BadRequestException(
+        upperBin
+          ? `No matching pending item found for SKU ${payload.barcode} in bin ${payload.binBarcode}.`
+          : `No matching pending item found for SKU ${payload.barcode} on this pick list.`,
+      );
+    }
+
+    const newPicked = Math.min(match.quantity_picked + qty, match.quantity_required);
+    const newStatus = newPicked >= match.quantity_required ? 'completed' : 'in_progress';
+    await db.query(
+      `UPDATE pick_list_items
+          SET quantity_picked = $1, status = $2
+        WHERE id = $3`,
+      [newPicked, newStatus, match.id],
+    );
+
+    // Bump pick list status to in_progress if it was pending/assigned
+    await db.query(
+      `UPDATE pick_lists SET status = 'in_progress', started_at = COALESCE(started_at, NOW()), updated_at = NOW()
+        WHERE id = $1 AND tenant_id = $2 AND status IN ('pending', 'assigned')`,
+      [pickListId, tid],
+    );
+
+    return {
+      ok: true,
+      itemId: match.id,
+      skuCode: match.sku_code,
+      binCode: match.bin_code,
+      quantityPicked: newPicked,
+      quantityRequired: match.quantity_required,
+      status: newStatus,
+    };
+  }
+
   private async generateCode(): Promise<string> {
     const count = await this.repository.countByTenant(getCurrentTenantId());
     return `PL-${String(count + 1).padStart(3, '0')}`;

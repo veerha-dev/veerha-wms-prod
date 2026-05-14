@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, HttpCode, HttpStatus, Req, UseGuards } from '@nestjs/common';
 import { ReturnsService } from './returns.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateReturnDto, UpdateReturnDto, QueryReturnDto } from './dto';
 
 @Controller('api/v1/returns')
@@ -40,5 +41,22 @@ export class ReturnsController {
     if (body.decision) extraFields.decision = body.decision;
     if (body.inspection_notes) extraFields.notes = body.inspection_notes;
     return { success: true, data: await this.service.updateStatus(id, 'processed', extraFields) };
+  }
+
+  @Get(':id/suggest-bins')
+  @UseGuards(JwtAuthGuard)
+  async suggestBins(@Param('id') id: string) {
+    return { success: true, data: await this.service.suggestRestockBins(id) };
+  }
+
+  @Post(':id/disposition')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async disposition(
+    @Param('id') id: string,
+    @Body() body: { disposition: 'restock' | 'refurbish' | 'scrap'; binId?: string; notes?: string },
+    @Req() req: any,
+  ) {
+    return { success: true, data: await this.service.processDisposition(id, body, req.user) };
   }
 }

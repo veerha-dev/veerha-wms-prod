@@ -59,6 +59,11 @@ export class InventoryGateway implements OnGatewayConnection, OnGatewayDisconnec
     this.server.to(`tenant-${tenantId}`).emit('inventory-update', data);
   }
 
+  // Emit a tenant audit event for live dashboard activity feed.
+  emitAudit(tenantId: string, data: any) {
+    this.server.to(`tenant-${tenantId}`).emit('audit.created', data);
+  }
+
   // Emit stock level update to all subscribed clients
   emitStockLevelUpdate(tenantId: string, data: any) {
     this.server.to(`stock-levels-${data.tenantId}`).emit('stock-level-update', data);

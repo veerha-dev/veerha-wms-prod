@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpCode, HttpStatus, Req, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CycleCountsService } from './cycle-counts.service';
 import { CreateCycleCountDto, UpdateCycleCountDto, QueryCycleCountDto } from './dto';
 
@@ -61,6 +62,27 @@ export class CycleCountsController {
   @HttpCode(HttpStatus.OK)
   async complete(@Param('id') id: string) {
     return { success: true, data: await this.service.complete(id) };
+  }
+
+  @Post(':id/approve')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async approve(@Param('id') id: string, @Req() req: any) {
+    return { success: true, data: await this.service.approve(id, req.user) };
+  }
+
+  @Post(':id/reject')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async reject(@Param('id') id: string, @Req() req: any) {
+    return { success: true, data: await this.service.reject(id, req.user) };
+  }
+
+  @Post(':id/escalate')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async escalate(@Param('id') id: string, @Req() req: any, @Body() body: { notes?: string }) {
+    return { success: true, data: await this.service.escalate(id, req.user, body?.notes) };
   }
 
   @Post(':id/cancel')
